@@ -12,6 +12,7 @@ NomadNodes is a Web3-native vacation rental platform that eliminates intermediar
 ## 🏗️ Architecture
 
 This is a **monorepo** managed with:
+
 - **pnpm workspaces** - Package management
 - **Turborepo** - Build system optimization
 - **Node 20 LTS** - Runtime environment
@@ -33,6 +34,7 @@ nomad-nodes/
 ## 📋 Tech Stack
 
 ### Backend (Blockchain)
+
 - **Hardhat 3.0** - Smart contract development
 - **Solidity 0.8.28** - Smart contract language
 - **OpenZeppelin 5.4** - Audited contract libraries
@@ -40,6 +42,7 @@ nomad-nodes/
 - **Networks**: Sepolia (testnet) → Base (production)
 
 ### Frontend
+
 - **Next.js 16** - React framework with Turbopack
 - **Reown AppKit** - Wallet connection (WalletConnect v2)
 - **Wagmi v3** - React hooks for Ethereum
@@ -49,6 +52,7 @@ nomad-nodes/
 - **Shadcn/ui** - Component library
 
 ### Shared
+
 - **TypeScript 5.7** - Type-safe shared utilities
 - **Zod** (planned) - Runtime validation
 
@@ -63,17 +67,20 @@ nomad-nodes/
 ### Installation
 
 1. **Clone the repository**
+
 ```bash
 git clone https://github.com/YOUR_USERNAME/nomad-nodes.git
 cd nomad-nodes
 ```
 
 2. **Install dependencies**
+
 ```bash
 pnpm install
 ```
 
 3. **Setup environment variables**
+
 ```bash
 # Backend
 cp packages/backend/.env.example packages/backend/.env
@@ -85,6 +92,7 @@ cp packages/frontend/.env.example packages/frontend/.env
 ```
 
 4. **Initialize Husky hooks**
+
 ```bash
 pnpm prepare
 ```
@@ -92,11 +100,13 @@ pnpm prepare
 ### Development
 
 Run all packages in development mode:
+
 ```bash
 pnpm dev
 ```
 
 Or run specific packages:
+
 ```bash
 # Frontend only
 pnpm --filter @nomad-nodes/frontend dev
@@ -169,6 +179,7 @@ pnpm --filter @nomad-nodes/backend verify:sepolia
 ## 📦 Package Scripts
 
 ### Root Commands
+
 ```bash
 pnpm dev           # Start all packages in dev mode
 pnpm build         # Build all packages
@@ -179,6 +190,7 @@ pnpm clean         # Clean all build artifacts
 ```
 
 ### Backend Commands
+
 ```bash
 pnpm --filter @nomad-nodes/backend compile
 pnpm --filter @nomad-nodes/backend test
@@ -186,6 +198,7 @@ pnpm --filter @nomad-nodes/backend deploy:sepolia
 ```
 
 ### Frontend Commands
+
 ```bash
 pnpm --filter @nomad-nodes/frontend dev
 pnpm --filter @nomad-nodes/frontend build
@@ -196,14 +209,17 @@ pnpm --filter @nomad-nodes/frontend db:migrate
 ## 🔧 Development Workflow
 
 ### Pre-commit Hooks (Husky)
+
 - **Linting** - Auto-fix with ESLint
 - **Formatting** - Auto-format with Prettier
 - **Type checking** - Verify TypeScript types
 
 ### Pre-push Hooks
+
 - **Tests** - All tests must pass before push
 
 ### CI/CD Pipeline
+
 - **Lint** - Code quality checks
 - **Test** - Smart contract tests
 - **Build** - Build all packages
@@ -214,6 +230,7 @@ pnpm --filter @nomad-nodes/frontend db:migrate
 Located in `packages/frontend/prisma/schema.prisma`
 
 Key models:
+
 - `User` - Off-chain user data
 - `Property` - Property metadata (images, descriptions)
 - `Booking` - Booking records
@@ -222,11 +239,13 @@ Key models:
 ## 🌐 Network Configuration
 
 ### Sepolia (Testnet - Current)
+
 - Chain ID: 11155111
 - RPC: Alchemy/Infura
 - Faucet: https://sepoliafaucet.com
 
 ### Base (Production - Future)
+
 - Chain ID: 8453
 - RPC: https://mainnet.base.org
 - Explorer: https://basescan.org
@@ -240,6 +259,7 @@ Key models:
 5. Open a Pull Request
 
 ### Code Quality Standards
+
 - ✅ Tests coverage > 80%
 - ✅ Type-safe TypeScript
 - ✅ Gas-optimized contracts
