@@ -11,8 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: "20"
-  PNPM_VERSION: "9"
+  NODE_VERSION: "24"
+  PNPM_VERSION: "10"
 
 jobs:
   lint:
@@ -104,7 +104,8 @@ jobs:
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
-        if: always()
+        if: ${{ always() && github.event.repository.private == false }}
+        continue-on-error: true
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           directory: ./packages/backend/coverage
@@ -145,8 +146,8 @@ jobs:
       - name: Build all packages
         run: pnpm build
         env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN || '' }}
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM || '' }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
