@@ -1,8 +1,11 @@
-import hardhatToolboxMochaEthersPlugin from "@nomicfoundation/hardhat-toolbox-mocha-ethers";
-import { configVariable, defineConfig } from "hardhat/config";
+import type { HardhatUserConfig } from "hardhat/config";
 
-export default defineConfig({
-  plugins: [hardhatToolboxMochaEthersPlugin],
+import hardhatToolboxMochaEthersPlugin from "@nomicfoundation/hardhat-toolbox-mocha-ethers";
+import hardhatVerify from "@nomicfoundation/hardhat-verify";
+import { configVariable } from "hardhat/config";
+
+const config: HardhatUserConfig = {
+  plugins: [hardhatToolboxMochaEthersPlugin, hardhatVerify],
   solidity: {
     profiles: {
       default: {
@@ -28,14 +31,6 @@ export default defineConfig({
     },
   },
   networks: {
-    hardhatMainnet: {
-      type: "edr-simulated",
-      chainType: "l1",
-    },
-    hardhatOp: {
-      type: "edr-simulated",
-      chainType: "op",
-    },
     sepolia: {
       type: "http",
       chainType: "l1",
@@ -49,10 +44,9 @@ export default defineConfig({
       accounts: [configVariable("BASE_PRIVATE_KEY")],
     },
   },
-  etherscan: {
-    apiKey: {
-      sepolia: String(configVariable("ETHERSCAN_API_KEY")),
-      base: String(configVariable("BASESCAN_API_KEY")),
+  verify: {
+    etherscan: {
+      apiKey: configVariable("ETHERSCAN_API_KEY"),
     },
   },
   paths: {
@@ -61,4 +55,6 @@ export default defineConfig({
     cache: "./cache",
     artifacts: "./artifacts",
   },
-});
+};
+
+export default config;
