@@ -1,6 +1,7 @@
-import { defineConfig } from "eslint/config";
+import tsPlugin from "@typescript-eslint/eslint-plugin";
+import tsParser from "@typescript-eslint/parser";
 
-export default defineConfig([
+export default [
   {
     ignores: [
       "**/node_modules/**",
@@ -16,7 +17,23 @@ export default defineConfig([
     ],
   },
   {
-    files: ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
+    files: ["**/*.ts", "**/*.tsx"],
+    languageOptions: {
+      parser: tsParser,
+      ecmaVersion: 2022,
+      sourceType: "module",
+    },
+    plugins: {
+      "@typescript-eslint": tsPlugin,
+    },
+    rules: {
+      "no-console": ["warn", { allow: ["warn", "error"] }],
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "@typescript-eslint/no-explicit-any": "warn",
+    },
+  },
+  {
+    files: ["**/*.js", "**/*.jsx"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",
@@ -24,8 +41,6 @@ export default defineConfig([
     rules: {
       "no-console": ["warn", { allow: ["warn", "error"] }],
       "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
-      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
-      "@typescript-eslint/no-explicit-any": "warn",
     },
   },
-]);
+];

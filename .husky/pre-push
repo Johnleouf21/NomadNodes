@@ -1,17 +1,1 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
-echo "🧪 Running tests before push..."
-
-# Only run tests if test scripts exist
-if pnpm --filter @nomad-nodes/backend test > /dev/null 2>&1; then
-  echo "✅ Backend tests passed!"
-else
-  echo "⚠️  Backend tests not found or failed"
-fi
-
-# Build check to ensure no TypeScript errors
-echo "🔨 Checking TypeScript compilation..."
-pnpm build
-
-echo "✅ Pre-push checks passed!"
+cd packages/backend && npx hardhat test
