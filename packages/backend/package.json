@@ -9,7 +9,7 @@
     "compile": "hardhat compile",
     "test": "hardhat test",
     "test:coverage": "hardhat coverage",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "pnpm compile && tsc --noEmit",
     "build": "pnpm compile",
     "deploy:local": "hardhat run scripts/deploy.ts --network hardhatMainnet",
     "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia",
