@@ -15,7 +15,7 @@ const config: HardhatUserConfig = {
             enabled: true,
             runs: 200,
           },
-          viaIR: false,
+          viaIR: true,
         },
       },
       production: {
@@ -23,7 +23,7 @@ const config: HardhatUserConfig = {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 1000,
+            runs: 200,
           },
           viaIR: true,
         },

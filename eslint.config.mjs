@@ -43,4 +43,19 @@ export default [
       "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
     },
   },
+  // Special rules for scripts - allow console.log and any
+  {
+    files: ["**/scripts/**/*.ts", "**/scripts/**/*.js"],
+    rules: {
+      "no-console": "off",
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
+  // Special rules for tests - allow any type
+  {
+    files: ["**/test/**/*.ts", "**/*.test.ts", "**/*.spec.ts"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
 ];
