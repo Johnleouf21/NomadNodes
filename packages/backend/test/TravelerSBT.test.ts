@@ -253,6 +253,90 @@ describe("TravelerSBT", function () {
       // TokenURI includes tier information
     });
 
+    it("should show Elite tier color and name in tokenURI (covers lines 294-296)", async function () {
+      // Achieve Elite tier: 51+ bookings, rating >= 4.5
+      for (let i = 0; i < 51; i++) {
+        await travelerSBT.updateReputation(traveler1.address, 5, false);
+      }
+
+      const uri = await travelerSBT.tokenURI(1);
+      const json = Buffer.from(
+        uri.replace("data:application/json;base64,", ""),
+        "base64"
+      ).toString();
+      const metadata = JSON.parse(json);
+
+      const svg = Buffer.from(
+        metadata.image.replace("data:image/svg+xml;base64,", ""),
+        "base64"
+      ).toString();
+
+      expect(svg).to.include("ELITE");
+      expect(svg).to.include("#FFD700"); // Gold color
+    });
+
+    it("should show Trusted tier color and name in tokenURI (covers lines 297-299)", async function () {
+      // Achieve Trusted tier: 21+ bookings, rating >= 4.0
+      for (let i = 0; i < 22; i++) {
+        await travelerSBT.updateReputation(traveler1.address, 4, false);
+      }
+
+      const uri = await travelerSBT.tokenURI(1);
+      const json = Buffer.from(
+        uri.replace("data:application/json;base64,", ""),
+        "base64"
+      ).toString();
+      const metadata = JSON.parse(json);
+
+      const svg = Buffer.from(
+        metadata.image.replace("data:image/svg+xml;base64,", ""),
+        "base64"
+      ).toString();
+
+      expect(svg).to.include("TRUSTED");
+      expect(svg).to.include("#C0C0C0"); // Silver color
+    });
+
+    it("should show Regular tier color and name in tokenURI (covers lines 300-302)", async function () {
+      // Achieve Regular tier: 6+ bookings
+      for (let i = 0; i < 7; i++) {
+        await travelerSBT.updateReputation(traveler1.address, 5, false);
+      }
+
+      const uri = await travelerSBT.tokenURI(1);
+      const json = Buffer.from(
+        uri.replace("data:application/json;base64,", ""),
+        "base64"
+      ).toString();
+      const metadata = JSON.parse(json);
+
+      const svg = Buffer.from(
+        metadata.image.replace("data:image/svg+xml;base64,", ""),
+        "base64"
+      ).toString();
+
+      expect(svg).to.include("REGULAR");
+      expect(svg).to.include("#CD7F32"); // Bronze color
+    });
+
+    it("should show Newcomer tier color and name in tokenURI (covers lines 304-306)", async function () {
+      // No bookings - should be Newcomer
+      const uri = await travelerSBT.tokenURI(1);
+      const json = Buffer.from(
+        uri.replace("data:application/json;base64,", ""),
+        "base64"
+      ).toString();
+      const metadata = JSON.parse(json);
+
+      const svg = Buffer.from(
+        metadata.image.replace("data:image/svg+xml;base64,", ""),
+        "base64"
+      ).toString();
+
+      expect(svg).to.include("NEWCOMER");
+      expect(svg).to.include("#94A3B8"); // Gray color
+    });
+
     it("should revert tokenURI for non-existent token", async function () {
       await expect(travelerSBT.tokenURI(999)).to.be.revertedWithCustomError(
         travelerSBT,
@@ -460,6 +544,29 @@ describe("TravelerSBT", function () {
       await expect(
         travelerSBT.updateReputation(traveler1.address, 5, false)
       ).to.be.revertedWithCustomError(travelerSBT, "TravelerIsSuspended");
+    });
+  });
+
+  describe("Link Booking Error Coverage", function () {
+    let updater: Awaited<ReturnType<typeof ethers.getSigners>>[0];
+
+    beforeEach(async function () {
+      [updater] = (await ethers.getSigners()).slice(3);
+    });
+
+    it("should revert linkBooking if not authorized updater", async function () {
+      await expect(
+        travelerSBT.connect(updater).linkBooking(traveler1.address, 1n, 0)
+      ).to.be.revertedWithCustomError(travelerSBT, "NotAuthorized");
+    });
+
+    it("should revert linkBooking if traveler has no SBT", async function () {
+      await travelerSBT.setAuthorizedUpdater(updater.address, true);
+
+      const noSBTAddress = updater.address;
+      await expect(
+        travelerSBT.connect(updater).linkBooking(noSBTAddress, 1n, 0)
+      ).to.be.revertedWithCustomError(travelerSBT, "NoSBT");
     });
   });
 });

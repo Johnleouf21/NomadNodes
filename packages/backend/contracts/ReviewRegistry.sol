@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "./interfaces/ITravelerSBT.sol";
 import "./interfaces/IHostSBT.sol";
 import "./interfaces/IPropertyNFT.sol";
+import "./interfaces/IPropertyRegistry.sol";
 
 /**
  * @title ReviewRegistry
@@ -51,6 +52,7 @@ contract ReviewRegistry is Ownable {
     ITravelerSBT public travelerSBT;
     IHostSBT public hostSBT;
     IPropertyNFT public propertyNFT;
+    IPropertyRegistry public propertyRegistry;
 
     address public reviewValidator;
     mapping(address => bool) public moderators;
@@ -85,10 +87,16 @@ contract ReviewRegistry is Ownable {
                             CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
 
-    constructor(address _travelerSBT, address _hostSBT, address _propertyNFT) Ownable(msg.sender) {
+    constructor(
+        address _travelerSBT,
+        address _hostSBT,
+        address _propertyNFT,
+        address _propertyRegistry
+    ) Ownable(msg.sender) {
         travelerSBT = ITravelerSBT(_travelerSBT);
         hostSBT = IHostSBT(_hostSBT);
         propertyNFT = IPropertyNFT(_propertyNFT);
+        propertyRegistry = IPropertyRegistry(_propertyRegistry);
         moderators[msg.sender] = true;
     }
 
@@ -153,7 +161,7 @@ contract ReviewRegistry is Ownable {
 
         // Update property rating
         if (propertyId != 0) {
-            propertyNFT.updatePropertyRating(propertyId, rating);
+            propertyRegistry.updatePropertyRating(propertyId, rating);
         }
 
         emit ReviewPublished(reviewId, propertyId, reviewer, reviewee, rating);
@@ -395,10 +403,16 @@ contract ReviewRegistry is Ownable {
     /**
      * @notice Update contract references
      */
-    function setContracts(address _travelerSBT, address _hostSBT, address _propertyNFT) external onlyOwner {
+    function setContracts(
+        address _travelerSBT,
+        address _hostSBT,
+        address _propertyNFT,
+        address _propertyRegistry
+    ) external onlyOwner {
         travelerSBT = ITravelerSBT(_travelerSBT);
         hostSBT = IHostSBT(_hostSBT);
         propertyNFT = IPropertyNFT(_propertyNFT);
+        propertyRegistry = IPropertyRegistry(_propertyRegistry);
     }
 
     /**

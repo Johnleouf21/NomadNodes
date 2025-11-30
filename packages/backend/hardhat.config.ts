@@ -13,7 +13,7 @@ const config: HardhatUserConfig = {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 200,
+            runs: 500, // Minimize contract size for deployment
           },
           viaIR: true,
         },
@@ -23,7 +23,7 @@ const config: HardhatUserConfig = {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 200,
+            runs: 500, // Minimize contract size for deployment
           },
           viaIR: true,
         },
@@ -31,6 +31,12 @@ const config: HardhatUserConfig = {
     },
   },
   networks: {
+    // Local development network
+    localhost: {
+      type: "http",
+      chainType: "l1",
+      url: "http://127.0.0.1:8545",
+    },
     sepolia: {
       type: "http",
       chainType: "l1",

@@ -3,16 +3,21 @@ import { network } from "hardhat";
 import type {
   ReviewValidator,
   ReviewRegistry,
-  PropertyNFT,
+  PropertyNFTAdapter,
+  PropertyRegistry,
+  TravelerSBT,
   HostSBT,
 } from "../types/ethers-contracts";
+import { deployModularArchitecture } from "./helpers/deployModular";
 
 const { ethers } = await network.connect();
 
 describe("ReviewValidator", function () {
   let reviewValidator: ReviewValidator;
   let reviewRegistry: ReviewRegistry;
-  let propertyNFT: PropertyNFT;
+  let propertyNFT: PropertyNFTAdapter;
+  let propertyRegistry: PropertyRegistry;
+  let travelerSBT: TravelerSBT;
   let hostSBT: HostSBT;
   let owner: Awaited<ReturnType<typeof ethers.getSigners>>[0];
   let moderator: Awaited<ReturnType<typeof ethers.getSigners>>[0];
@@ -22,30 +27,50 @@ describe("ReviewValidator", function () {
   beforeEach(async function () {
     [owner, moderator, traveler, host] = await ethers.getSigners();
 
+    // Deploy TravelerSBT
+    const TravelerSBTFactory = await ethers.getContractFactory("TravelerSBT");
+    travelerSBT = (await TravelerSBTFactory.deploy()) as unknown as TravelerSBT;
+
     // Deploy HostSBT
     const HostSBTFactory = await ethers.getContractFactory("HostSBT");
     hostSBT = (await HostSBTFactory.deploy()) as unknown as HostSBT;
 
-    // Deploy PropertyNFT
-    const PropertyNFTFactory = await ethers.getContractFactory("PropertyNFT");
-    propertyNFT = (await PropertyNFTFactory.deploy(
-      await hostSBT.getAddress(),
-      owner.address
-    )) as unknown as PropertyNFT;
+    // Deploy modular architecture
+    const modularContracts = await deployModularArchitecture(
+      hostSBT,
+      travelerSBT,
+      owner.address, // platform
+      owner.address, // escrowFactory (mock)
+      undefined // reviewRegistry will be set later
+    );
 
-    await hostSBT.setAuthorizedUpdater(await propertyNFT.getAddress(), true);
+    propertyRegistry = modularContracts.propertyRegistry;
+
+    // Deploy PropertyNFTAdapter
+    const PropertyNFTAdapterFactory = await ethers.getContractFactory("PropertyNFTAdapter");
+    propertyNFT = (await PropertyNFTAdapterFactory.deploy(
+      await propertyRegistry.getAddress(),
+      await modularContracts.roomTypeNFT.getAddress(),
+      await modularContracts.availabilityManager.getAddress(),
+      await modularContracts.bookingManager.getAddress()
+    )) as unknown as PropertyNFTAdapter;
 
     // Deploy ReviewRegistry
     const ReviewRegistryFactory = await ethers.getContractFactory("ReviewRegistry");
     reviewRegistry = (await ReviewRegistryFactory.deploy(
-      owner.address, // TravelerSBT placeholder
+      await travelerSBT.getAddress(),
       await hostSBT.getAddress(),
-      await propertyNFT.getAddress()
+      await propertyNFT.getAddress(),
+      await propertyRegistry.getAddress()
     )) as unknown as ReviewRegistry;
 
-    // Authorize ReviewRegistry to update HostSBT and PropertyNFT
+    // Authorize ReviewRegistry to update SBTs
+    await travelerSBT.setAuthorizedUpdater(await reviewRegistry.getAddress(), true);
     await hostSBT.setAuthorizedUpdater(await reviewRegistry.getAddress(), true);
-    await propertyNFT.setReviewRegistry(await reviewRegistry.getAddress());
+
+    // Set ReviewRegistry in PropertyRegistry and BookingManager
+    await propertyRegistry.setReviewRegistry(await reviewRegistry.getAddress());
+    await modularContracts.bookingManager.setReviewRegistry(await reviewRegistry.getAddress());
 
     // Deploy ReviewValidator
     const ReviewValidatorFactory = await ethers.getContractFactory("ReviewValidator");
@@ -340,10 +365,10 @@ describe("ReviewValidator", function () {
       // Mint SBT for host
       await hostSBT.mint(host.address);
 
-      // Submit and approve a review
+      // Submit and approve a review (use propertyId 0 since no properties are created)
       await reviewValidator
         .connect(traveler)
-        .submitReview(1, 1, 0, host.address, 5, "ipfs://test", true);
+        .submitReview(1, 0, 0, host.address, 5, "ipfs://test", true);
       await reviewValidator.connect(moderator).approveReview(0);
     });
 
@@ -367,7 +392,7 @@ describe("ReviewValidator", function () {
       // Submit another review that's not approved
       await reviewValidator
         .connect(traveler)
-        .submitReview(2, 1, 1, host.address, 4, "ipfs://", true);
+        .submitReview(2, 0, 1, host.address, 4, "ipfs://", true);
 
       await expect(
         reviewValidator.connect(traveler).publishReview(1)
@@ -387,11 +412,11 @@ describe("ReviewValidator", function () {
       // Mint SBT for host
       await hostSBT.mint(host.address);
 
-      // Submit and approve 3 reviews
+      // Submit and approve 3 reviews (use propertyId 0 since no properties are created)
       for (let i = 1; i <= 3; i++) {
         await reviewValidator
           .connect(traveler)
-          .submitReview(i, 1, 0, host.address, 5, "ipfs://", true);
+          .submitReview(i, 0, 0, host.address, 5, "ipfs://", true);
         await reviewValidator.connect(moderator).approveReview(i - 1);
       }
     });
@@ -408,7 +433,7 @@ describe("ReviewValidator", function () {
       // Submit a 4th review and leave it pending (not approved)
       await reviewValidator
         .connect(traveler)
-        .submitReview(4, 1, 0, host.address, 5, "ipfs://", true);
+        .submitReview(4, 0, 0, host.address, 5, "ipfs://", true);
 
       // Try to batch publish including pending review
       await reviewValidator.connect(moderator).batchPublish([0, 1, 2, 3]);

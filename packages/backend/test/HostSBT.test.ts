@@ -516,6 +516,90 @@ describe("HostSBT", function () {
       expect(svg).to.include("5.00"); // Rating
       expect(svg).to.include("NEWCOMER"); // Tier
     });
+
+    it("should show SuperHost tier color and name in tokenURI (covers lines 395-397)", async function () {
+      // Achieve SuperHost status: 50+ bookings, rating >= 4.7, response time < 120min
+      for (let i = 0; i < 50; i++) {
+        await hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 5, 60);
+      }
+
+      const uri = await hostSBT.tokenURI(1);
+      const json = Buffer.from(
+        uri.replace("data:application/json;base64,", ""),
+        "base64"
+      ).toString();
+      const metadata = JSON.parse(json);
+
+      const svg = Buffer.from(
+        metadata.image.replace("data:image/svg+xml;base64,", ""),
+        "base64"
+      ).toString();
+
+      expect(svg).to.include("SUPERHOST");
+      expect(svg).to.include("#FF1493"); // Pink/magenta color
+    });
+
+    it("should show Pro tier color and name in tokenURI (covers lines 398-400)", async function () {
+      // Achieve Pro tier: 21+ bookings, rating >= 4.0 (but not SuperHost)
+      for (let i = 0; i < 21; i++) {
+        await hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 4, 30);
+      }
+
+      const uri = await hostSBT.tokenURI(1);
+      const json = Buffer.from(
+        uri.replace("data:application/json;base64,", ""),
+        "base64"
+      ).toString();
+      const metadata = JSON.parse(json);
+
+      const svg = Buffer.from(
+        metadata.image.replace("data:image/svg+xml;base64,", ""),
+        "base64"
+      ).toString();
+
+      expect(svg).to.include("PRO");
+      expect(svg).to.include("#FFD700"); // Gold color
+    });
+
+    it("should show Experienced tier color and name in tokenURI (covers lines 401-403)", async function () {
+      // Achieve Experienced tier: 6+ bookings (but not enough for Pro)
+      for (let i = 0; i < 10; i++) {
+        await hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 5, 30);
+      }
+
+      const uri = await hostSBT.tokenURI(1);
+      const json = Buffer.from(
+        uri.replace("data:application/json;base64,", ""),
+        "base64"
+      ).toString();
+      const metadata = JSON.parse(json);
+
+      const svg = Buffer.from(
+        metadata.image.replace("data:image/svg+xml;base64,", ""),
+        "base64"
+      ).toString();
+
+      expect(svg).to.include("EXPERIENCED");
+      expect(svg).to.include("#C0C0C0"); // Silver color
+    });
+
+    it("should show Newcomer tier color and name in tokenURI (covers lines 404-406)", async function () {
+      // No bookings - should be Newcomer
+      const uri = await hostSBT.tokenURI(1);
+      const json = Buffer.from(
+        uri.replace("data:application/json;base64,", ""),
+        "base64"
+      ).toString();
+      const metadata = JSON.parse(json);
+
+      const svg = Buffer.from(
+        metadata.image.replace("data:image/svg+xml;base64,", ""),
+        "base64"
+      ).toString();
+
+      expect(svg).to.include("NEWCOMER");
+      expect(svg).to.include("#94A3B8"); // Gray color
+    });
   });
 
   describe("Admin Functions", function () {

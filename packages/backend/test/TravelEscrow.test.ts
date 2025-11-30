@@ -1,16 +1,30 @@
 import { expect } from "chai";
 import { network } from "hardhat";
-import type { TravelEscrow, PropertyNFT, HostSBT, MockERC20 } from "../types/ethers-contracts";
+import type {
+  TravelEscrow,
+  HostSBT,
+  TravelerSBT,
+  MockERC20,
+  PropertyRegistry,
+  RoomTypeNFT,
+  AvailabilityManager,
+  BookingManager,
+  PropertyNFTAdapter,
+} from "../types/ethers-contracts";
 
 const { ethers, networkHelpers } = await network.connect();
 const { time } = networkHelpers;
 
 describe("TravelEscrow", function () {
   let travelEscrow: TravelEscrow;
-  let propertyNFT: PropertyNFT;
+  let propertyNFT: PropertyNFTAdapter;
+  let propertyRegistry: PropertyRegistry;
+  let roomTypeNFT: RoomTypeNFT;
+  let availabilityManager: AvailabilityManager;
+  let bookingManager: BookingManager;
   let hostSBT: HostSBT;
+  let travelerSBT: TravelerSBT;
   let USDC: MockERC20;
-  let owner: Awaited<ReturnType<typeof ethers.getSigners>>[0];
   let platform: Awaited<ReturnType<typeof ethers.getSigners>>[0];
   let admin: Awaited<ReturnType<typeof ethers.getSigners>>[0];
   let backendSigner: Awaited<ReturnType<typeof ethers.getSigners>>[0];
@@ -24,7 +38,7 @@ describe("TravelEscrow", function () {
   const platformFee = ethers.parseUnits("37.5", 6); // 7.5%
 
   beforeEach(async function () {
-    [owner, platform, admin, backendSigner, host, traveler] = await ethers.getSigners();
+    [, platform, admin, backendSigner, host, traveler] = await ethers.getSigners();
 
     // Deploy mock USDC
     const MockERC20 = await ethers.getContractFactory("MockERC20");
@@ -34,36 +48,119 @@ describe("TravelEscrow", function () {
     // Deploy HostSBT
     const HostSBTFactory = await ethers.getContractFactory("HostSBT");
     hostSBT = (await HostSBTFactory.deploy()) as unknown as HostSBT;
+    await hostSBT.waitForDeployment();
 
-    // Deploy PropertyNFT
-    const PropertyNFTFactory = await ethers.getContractFactory("PropertyNFT");
-    propertyNFT = (await PropertyNFTFactory.deploy(
+    // Deploy TravelerSBT
+    const TravelerSBTFactory = await ethers.getContractFactory("TravelerSBT");
+    travelerSBT = (await TravelerSBTFactory.deploy()) as unknown as TravelerSBT;
+    await travelerSBT.waitForDeployment();
+
+    // Mint SBTs
+    await hostSBT.mint(host.address);
+    await travelerSBT.mint(traveler.address);
+
+    // Deploy PropertyRegistry
+    const PropertyRegistryFactory = await ethers.getContractFactory("PropertyRegistry");
+    propertyRegistry = (await PropertyRegistryFactory.deploy(
       await hostSBT.getAddress(),
       platform.address
-    )) as unknown as PropertyNFT;
+    )) as unknown as PropertyRegistry;
+    await propertyRegistry.waitForDeployment();
 
-    await hostSBT.setAuthorizedUpdater(await propertyNFT.getAddress(), true);
+    // Authorize PropertyRegistry to update HostSBT
+    await hostSBT.setAuthorizedUpdater(await propertyRegistry.getAddress(), true);
+
+    // Deploy RoomTypeNFT
+    const RoomTypeNFTFactory = await ethers.getContractFactory("RoomTypeNFT");
+    roomTypeNFT = (await RoomTypeNFTFactory.deploy(
+      await propertyRegistry.getAddress()
+    )) as unknown as RoomTypeNFT;
+    await roomTypeNFT.waitForDeployment();
+
+    // Deploy AvailabilityManager
+    const AvailabilityManagerFactory = await ethers.getContractFactory("AvailabilityManager");
+    availabilityManager = (await AvailabilityManagerFactory.deploy(
+      await roomTypeNFT.getAddress()
+    )) as unknown as AvailabilityManager;
+    await availabilityManager.waitForDeployment();
+
+    // Deploy BookingManager
+    const BookingManagerFactory = await ethers.getContractFactory("BookingManager");
+    bookingManager = (await BookingManagerFactory.deploy(
+      await propertyRegistry.getAddress(),
+      await roomTypeNFT.getAddress(),
+      await availabilityManager.getAddress(),
+      await travelerSBT.getAddress()
+    )) as unknown as BookingManager;
+    await bookingManager.waitForDeployment();
+
+    // Deploy PropertyNFTAdapter
+    const PropertyNFTAdapterFactory = await ethers.getContractFactory("PropertyNFTAdapter");
+    propertyNFT = (await PropertyNFTAdapterFactory.deploy(
+      await propertyRegistry.getAddress(),
+      await roomTypeNFT.getAddress(),
+      await availabilityManager.getAddress(),
+      await bookingManager.getAddress()
+    )) as unknown as PropertyNFTAdapter;
+    await propertyNFT.waitForDeployment();
+
+    // Wire up references
+    await propertyRegistry.setRoomTypeNFT(await roomTypeNFT.getAddress());
+    await propertyRegistry.setBookingManager(await bookingManager.getAddress());
+    await roomTypeNFT.setAvailabilityManager(await availabilityManager.getAddress());
+    await roomTypeNFT.setBookingManager(await bookingManager.getAddress());
+    await bookingManager.setPropertyRegistry(await propertyRegistry.getAddress());
+
+    // Authorize BookingManager to update TravelerSBT
+    await travelerSBT.setAuthorizedUpdater(await bookingManager.getAddress(), true);
+
+    // Authorize BookingManager to modify availability
+    await availabilityManager.setBookingManager(await bookingManager.getAddress());
+
+    // Set PropertyNFTAdapter in BookingManager to allow tx.origin passthrough
+    await bookingManager.setPropertyNFTAdapter(await propertyNFT.getAddress());
+
+    // Set traveler as escrowFactory in BookingManager to allow booking creation
+    await bookingManager.setEscrowFactory(traveler.address);
 
     // Setup property
-    await hostSBT.connect(host).mint(host.address);
-    await propertyNFT.connect(host).createProperty("ipfs://", "hotel", "Paris");
-    await propertyNFT.connect(host).addRoomType(1, "Standard", 5, "ipfs://");
+    await propertyRegistry.connect(host).createProperty("ipfs://property", "hotel", "Paris");
 
-    tokenId = await propertyNFT.encodeTokenId(1, 0);
-    checkIn = (await time.latest()) + 86400; // Tomorrow
+    // Add room type
+    await roomTypeNFT.connect(host).addRoomType(
+      1, // propertyId
+      "Standard Room",
+      "ipfs://room",
+      100, // pricePerNight (not used in this test but required)
+      20, // cleaningFee
+      2, // maxGuests
+      5 // maxSupply
+    );
+
+    // Encode tokenId (propertyId=1, roomTypeId=1)
+    tokenId = await roomTypeNFT.encodeTokenId(1, 1);
+
+    // Get current time and normalize to start of day
+    const now = await time.latest();
+    const normalizedNow = Math.floor(now / 86400) * 86400;
+    checkIn = normalizedNow + 86400; // Tomorrow
     checkOut = checkIn + 86400 * 3; // 3 days
 
     // Set availability for next 100 days
-    const now = await time.latest();
-    const startDate = now;
-    const endDate = now + 86400 * 100; // 100 days availability
-    await propertyNFT.connect(host).setAvailability(tokenId, startDate, endDate, 5);
+    const startDate = normalizedNow;
+    const endDate = normalizedNow + 86400 * 100; // 100 days availability
 
-    // Set owner as escrowFactory to be able to create bookings
-    await propertyNFT.setEscrowFactory(owner.address);
+    // Set availability for all 5 units (0-4)
+    for (let unit = 0; unit < 5; unit++) {
+      await availabilityManager
+        .connect(host)
+        .setAvailability(tokenId, unit, startDate, endDate, true);
+    }
 
-    // Create booking in PropertyNFT
-    await propertyNFT.bookRoom(tokenId, traveler.address, checkIn, checkOut, 0);
+    // Create booking in BookingManager (must be called by traveler who has TravelerSBT)
+    await bookingManager
+      .connect(traveler)
+      .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress);
 
     // Deploy TravelEscrow
     const TravelEscrowFactory = await ethers.getContractFactory("TravelEscrow");
@@ -285,6 +382,18 @@ describe("TravelEscrow", function () {
       );
     });
 
+    it("should revert confirmStay if not in Pending status", async function () {
+      // Fast forward and auto-release (moves to Completed status)
+      await time.increaseTo(checkIn + 86400 * 2 + 1);
+      await travelEscrow.autoReleaseToHost();
+
+      // Try to confirmStay when status is Completed (not Pending)
+      await expect(travelEscrow.connect(traveler).confirmStay()).to.be.revertedWithCustomError(
+        travelEscrow,
+        "InvalidStatus"
+      );
+    });
+
     it("should auto-release 48h after checkIn", async function () {
       // Fast forward to checkIn + 48h
       await time.increaseTo(checkIn + 86400 * 2 + 1);
@@ -485,23 +594,19 @@ describe("TravelEscrow", function () {
       let futureEscrow: TravelEscrow;
       let futureCheckIn: number;
       let futureCheckOut: number;
-      let bookingIndex: number;
 
       beforeEach(async function () {
         // Create new escrow with far future date
         futureCheckIn = (await time.latest()) + 86400 * 32; // 32 days (>30 for 100% refund)
         futureCheckOut = futureCheckIn + 86400 * 3;
 
-        // Create booking in PropertyNFT for this escrow
-        await propertyNFT.bookRoom(
-          tokenId,
-          traveler.address,
-          futureCheckIn,
-          futureCheckOut,
-          100 // Unique escrowId
-        );
-        const bookings = await propertyNFT.getBookings(tokenId);
-        bookingIndex = Number(bookings.length) - 1;
+        // Create booking in BookingManager
+        await bookingManager
+          .connect(traveler)
+          .bookRoom(tokenId, futureCheckIn, futureCheckOut, 2, ethers.ZeroAddress);
+
+        const bookings = await bookingManager.getBookings(tokenId);
+        const bookingIndex = Number(bookings.length) - 1;
 
         const TravelEscrowFactory = await ethers.getContractFactory("TravelEscrow");
         futureEscrow = (await TravelEscrowFactory.deploy(
@@ -521,14 +626,14 @@ describe("TravelEscrow", function () {
         )) as unknown as TravelEscrow;
 
         // Authorize futureEscrow as escrowFactory so it can cancel bookings
-        await propertyNFT.setEscrowFactory(await futureEscrow.getAddress());
+        await bookingManager.setEscrowFactory(await futureEscrow.getAddress());
 
         await USDC.connect(traveler).transfer(await futureEscrow.getAddress(), amount);
       });
 
       afterEach(async function () {
-        // Reset escrowFactory to owner for next tests
-        await propertyNFT.setEscrowFactory(owner.address);
+        // Reset escrowFactory to traveler for next tests
+        await bookingManager.setEscrowFactory(traveler.address);
       });
 
       it("should give 100% refund if >30 days before checkIn", async function () {
@@ -546,22 +651,18 @@ describe("TravelEscrow", function () {
       let futureEscrow: TravelEscrow;
       let futureCheckIn: number;
       let futureCheckOut: number;
-      let bookingIndex: number;
 
       beforeEach(async function () {
         futureCheckIn = (await time.latest()) + 86400 * 20; // 20 days
         futureCheckOut = futureCheckIn + 86400 * 3;
 
-        // Create booking in PropertyNFT for this escrow
-        await propertyNFT.bookRoom(
-          tokenId,
-          traveler.address,
-          futureCheckIn,
-          futureCheckOut,
-          101 // Unique escrowId
-        );
-        const bookings = await propertyNFT.getBookings(tokenId);
-        bookingIndex = Number(bookings.length) - 1;
+        // Create booking in BookingManager
+        await bookingManager
+          .connect(traveler)
+          .bookRoom(tokenId, futureCheckIn, futureCheckOut, 2, ethers.ZeroAddress);
+
+        const bookings = await bookingManager.getBookings(tokenId);
+        const bookingIndex = Number(bookings.length) - 1;
 
         const TravelEscrowFactory = await ethers.getContractFactory("TravelEscrow");
         futureEscrow = (await TravelEscrowFactory.deploy(
@@ -581,14 +682,14 @@ describe("TravelEscrow", function () {
         )) as unknown as TravelEscrow;
 
         // Authorize futureEscrow as escrowFactory so it can cancel bookings
-        await propertyNFT.setEscrowFactory(await futureEscrow.getAddress());
+        await bookingManager.setEscrowFactory(await futureEscrow.getAddress());
 
         await USDC.connect(traveler).transfer(await futureEscrow.getAddress(), amount);
       });
 
       afterEach(async function () {
-        // Reset escrowFactory to owner for next tests
-        await propertyNFT.setEscrowFactory(owner.address);
+        // Reset escrowFactory to traveler for next tests
+        await bookingManager.setEscrowFactory(traveler.address);
       });
 
       it("should give 50% refund if 14-30 days before checkIn", async function () {
@@ -609,22 +710,18 @@ describe("TravelEscrow", function () {
       let futureEscrow: TravelEscrow;
       let futureCheckIn: number;
       let futureCheckOut: number;
-      let bookingIndex: number;
 
       beforeEach(async function () {
         futureCheckIn = (await time.latest()) + 86400 * 10; // 10 days
         futureCheckOut = futureCheckIn + 86400 * 3;
 
-        // Create booking in PropertyNFT for this escrow
-        await propertyNFT.bookRoom(
-          tokenId,
-          traveler.address,
-          futureCheckIn,
-          futureCheckOut,
-          102 // Unique escrowId
-        );
-        const bookings = await propertyNFT.getBookings(tokenId);
-        bookingIndex = Number(bookings.length) - 1;
+        // Create booking in BookingManager
+        await bookingManager
+          .connect(traveler)
+          .bookRoom(tokenId, futureCheckIn, futureCheckOut, 2, ethers.ZeroAddress);
+
+        const bookings = await bookingManager.getBookings(tokenId);
+        const bookingIndex = Number(bookings.length) - 1;
 
         const TravelEscrowFactory = await ethers.getContractFactory("TravelEscrow");
         futureEscrow = (await TravelEscrowFactory.deploy(
@@ -644,14 +741,14 @@ describe("TravelEscrow", function () {
         )) as unknown as TravelEscrow;
 
         // Authorize futureEscrow as escrowFactory so it can cancel bookings
-        await propertyNFT.setEscrowFactory(await futureEscrow.getAddress());
+        await bookingManager.setEscrowFactory(await futureEscrow.getAddress());
 
         await USDC.connect(traveler).transfer(await futureEscrow.getAddress(), amount);
       });
 
       afterEach(async function () {
-        // Reset escrowFactory to owner for next tests
-        await propertyNFT.setEscrowFactory(owner.address);
+        // Reset escrowFactory to traveler for next tests
+        await bookingManager.setEscrowFactory(traveler.address);
       });
 
       it("should give 0% refund if <14 days before checkIn", async function () {
@@ -669,9 +766,11 @@ describe("TravelEscrow", function () {
       const futureCheckIn = (await time.latest()) + 86400 * 32; // 32 days to ensure >30
       const futureCheckOut = futureCheckIn + 86400 * 3;
 
-      // Create booking in PropertyNFT for this escrow
-      await propertyNFT.bookRoom(tokenId, traveler.address, futureCheckIn, futureCheckOut, 4);
-      const bookings = await propertyNFT.getBookings(tokenId);
+      // Create booking in BookingManager
+      await bookingManager
+        .connect(traveler)
+        .bookRoom(tokenId, futureCheckIn, futureCheckOut, 2, ethers.ZeroAddress);
+      const bookings = await bookingManager.getBookings(tokenId);
       const bookingIndex = Number(bookings.length) - 1;
 
       const TravelEscrowFactory = await ethers.getContractFactory("TravelEscrow");
@@ -698,9 +797,11 @@ describe("TravelEscrow", function () {
       const futureCheckIn = (await time.latest()) + 86400 * 20; // 20 days
       const futureCheckOut = futureCheckIn + 86400 * 3;
 
-      // Create booking in PropertyNFT for this escrow
-      await propertyNFT.bookRoom(tokenId, traveler.address, futureCheckIn, futureCheckOut, 5);
-      const bookings = await propertyNFT.getBookings(tokenId);
+      // Create booking in BookingManager
+      await bookingManager
+        .connect(traveler)
+        .bookRoom(tokenId, futureCheckIn, futureCheckOut, 2, ethers.ZeroAddress);
+      const bookings = await bookingManager.getBookings(tokenId);
       const bookingIndex = Number(bookings.length) - 1;
 
       const TravelEscrowFactory = await ethers.getContractFactory("TravelEscrow");
@@ -727,9 +828,11 @@ describe("TravelEscrow", function () {
       const futureCheckIn = (await time.latest()) + 86400 * 10; // 10 days
       const futureCheckOut = futureCheckIn + 86400 * 3;
 
-      // Create booking in PropertyNFT for this escrow
-      await propertyNFT.bookRoom(tokenId, traveler.address, futureCheckIn, futureCheckOut, 6);
-      const bookings = await propertyNFT.getBookings(tokenId);
+      // Create booking in BookingManager
+      await bookingManager
+        .connect(traveler)
+        .bookRoom(tokenId, futureCheckIn, futureCheckOut, 2, ethers.ZeroAddress);
+      const bookings = await bookingManager.getBookings(tokenId);
       const bookingIndex = Number(bookings.length) - 1;
 
       const TravelEscrowFactory = await ethers.getContractFactory("TravelEscrow");
@@ -768,6 +871,14 @@ describe("TravelEscrow", function () {
       await expect(travelEscrow.connect(traveler).cancelBooking()).to.be.revertedWithCustomError(
         travelEscrow,
         "TooEarlyForAction"
+      );
+    });
+
+    it("should revert cancelBooking if not traveler", async function () {
+      // Try to cancel from host instead of traveler
+      await expect(travelEscrow.connect(host).cancelBooking()).to.be.revertedWithCustomError(
+        travelEscrow,
+        "Unauthorized"
       );
     });
   });

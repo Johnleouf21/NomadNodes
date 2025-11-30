@@ -1,6 +1,0 @@
-{
-  "NomadNodes": {
-    "useMockTokens": true,
-    "backendSigner": "0x0000000000000000000000000000000000000000"
-  }
-}

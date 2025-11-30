@@ -5,61 +5,71 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
-import "./TravelEscrow.sol";
+import "./libraries/QuoteVerifier.sol";
 import "./interfaces/IPropertyNFT.sol";
+import "./EscrowRegistry.sol";
+import "./EscrowDeployer.sol";
 
 /**
  * @title EscrowFactory
- * @notice Factory to create and manage TravelEscrow contracts with off-chain pricing
- * @dev KEY CHANGES:
- * - Removed Escrow.sol dependency (only TravelEscrow now)
- * - Added quote verification with backend signature
- * - Dual currency support (USDC/EURC)
- * - Integration with PropertyNFT (ERC1155)
- * - Removed IEscrowFactory interface (deprecated createEscrow function)
+ * @notice Lightweight factory to create TravelEscrow contracts with off-chain pricing
+ * @dev Delegates to EscrowRegistry (storage) and EscrowDeployer (deployment)
  */
 contract EscrowFactory is Ownable, Pausable {
     using SafeERC20 for IERC20;
-    using MessageHashUtils for bytes32;
 
-    // ============ Structs ============
+    /*//////////////////////////////////////////////////////////////
+                                STRUCTS
+    //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @notice Off-chain pricing quote signed by backend
-     */
-    struct BookingQuote {
-        uint256 tokenId; // PropertyNFT token ID (includes room type)
-        uint256 checkIn; // Check-in timestamp
-        uint256 checkOut; // Check-out timestamp
-        uint256 price; // Total price in selected currency
-        address currency; // USDC or EURC
-        uint256 validUntil; // Quote expiry timestamp
-        bytes signature; // Backend signature
+    struct RoomBooking {
+        uint256 tokenId;
+        uint256 quantity;
+        uint256 price;
     }
 
-    // ============ State Variables ============
+    struct BookingQuote {
+        uint256 tokenId;
+        uint256 checkIn;
+        uint256 checkOut;
+        uint256 price;
+        address currency;
+        uint256 validUntil;
+        uint256 quantity;
+        bytes signature;
+    }
 
-    uint256 public platformFeePercent = 750; // 7.5% (base 10000)
+    struct BatchBookingQuote {
+        RoomBooking[] rooms;
+        uint256 checkIn;
+        uint256 checkOut;
+        uint256 totalPrice;
+        address currency;
+        uint256 validUntil;
+        bytes signature;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            STATE VARIABLES
+    //////////////////////////////////////////////////////////////*/
+
+    uint256 public platformFeePercent = 750; // 7.5%
     uint256 public constant FEE_DENOMINATOR = 10000;
-    uint256 public minFee = 0.5e6; // 0.5 USDC/EURC minimum (6 decimals)
+    uint256 public minFee = 0.5e6; // 0.5 USDC/EURC
 
     address public platformWallet;
-    address public admin; // Admin who can resolve disputes
-    address public backendSigner; // Backend signer for quote verification
-    address public propertyNFT; // PropertyNFT contract address
-
-    // Supported stablecoins (USDC and EURC)
+    address public admin;
+    address public backendSigner;
+    address public propertyNFT;
     address public USDC;
     address public EURC;
 
-    mapping(uint256 => address) public escrows; // escrowId => escrow address
-    mapping(address => uint256[]) private userEscrowIds; // user => escrow IDs
+    EscrowRegistry public escrowRegistry;
+    EscrowDeployer public escrowDeployer;
 
-    uint256 public escrowCount;
-
-    // ============ Events ============
+    /*//////////////////////////////////////////////////////////////
+                                EVENTS
+    //////////////////////////////////////////////////////////////*/
 
     event EscrowCreated(
         address indexed escrowAddress,
@@ -68,13 +78,6 @@ contract EscrowFactory is Ownable, Pausable {
         address token,
         uint256 amount
     );
-    event PlatformFeeUpdated(uint256 oldFee, uint256 newFee);
-    event PlatformWalletUpdated(address indexed oldWallet, address indexed newWallet);
-    event MinFeeUpdated(uint256 oldMinFee, uint256 newMinFee);
-    event CurrencyUpdated(address indexed currency, string currencyType);
-    event AdminUpdated(address indexed oldAdmin, address indexed newAdmin);
-    event BackendSignerUpdated(address indexed oldSigner, address indexed newSigner);
-    event PropertyNFTUpdated(address indexed oldPropertyNFT, address indexed newPropertyNFT);
     event TravelEscrowCreated(
         address indexed escrowAddress,
         uint256 indexed tokenId,
@@ -84,8 +87,20 @@ contract EscrowFactory is Ownable, Pausable {
         uint256 checkIn,
         uint256 checkOut
     );
+    event BatchBookingCreated(
+        uint256 indexed batchId,
+        address indexed traveler,
+        address currency,
+        uint256 totalPrice,
+        uint256 checkIn,
+        uint256 checkOut,
+        uint256 roomCount,
+        uint256[] escrowIds
+    );
 
-    // ============ Errors ============
+    /*//////////////////////////////////////////////////////////////
+                                ERRORS
+    //////////////////////////////////////////////////////////////*/
 
     error InvalidAddress();
     error InvalidAmount();
@@ -93,8 +108,11 @@ contract EscrowFactory is Ownable, Pausable {
     error InvalidQuote();
     error QuoteExpired();
     error UnsupportedCurrency();
+    error EmptyRoomList();
 
-    // ============ Constructor ============
+    /*//////////////////////////////////////////////////////////////
+                            CONSTRUCTOR
+    //////////////////////////////////////////////////////////////*/
 
     constructor(
         address _platformWallet,
@@ -109,7 +127,9 @@ contract EscrowFactory is Ownable, Pausable {
             _backendSigner == address(0) ||
             _USDC == address(0) ||
             _EURC == address(0)
-        ) revert InvalidAddress();
+        ) {
+            revert InvalidAddress();
+        }
 
         platformWallet = _platformWallet;
         admin = _admin;
@@ -118,68 +138,59 @@ contract EscrowFactory is Ownable, Pausable {
         EURC = _EURC;
     }
 
-    // ============ CORE FUNCTIONS (with Off-Chain Pricing) ============
+    /*//////////////////////////////////////////////////////////////
+                        CORE CREATION FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @notice Create a TravelEscrow with off-chain pricing quote
-     * @param quote Signed booking quote from backend
-     * @return escrowAddress Address of created TravelEscrow
-     */
     function createTravelEscrowWithQuote(
         BookingQuote calldata quote
     ) external whenNotPaused returns (address escrowAddress) {
-        // 1. Verify quote signature
-        _verifyQuote(quote);
+        // Verify quote
+        if (
+            !QuoteVerifier.verifyQuote(
+                quote.tokenId,
+                quote.checkIn,
+                quote.checkOut,
+                quote.price,
+                quote.currency,
+                quote.validUntil,
+                quote.quantity,
+                quote.signature,
+                backendSigner,
+                address(this)
+            )
+        ) revert InvalidQuote();
 
-        // 2. Verify quote hasn't expired
         if (block.timestamp > quote.validUntil) revert QuoteExpired();
+        if (quote.currency != USDC && quote.currency != EURC) revert UnsupportedCurrency();
 
-        // 3. Verify currency is supported
-        if (quote.currency != USDC && quote.currency != EURC) {
-            revert UnsupportedCurrency();
-        }
-
-        // 4. Verify property and availability
+        // Verify availability
         if (propertyNFT == address(0)) revert InvalidAddress();
         IPropertyNFT nft = IPropertyNFT(propertyNFT);
+        if (!nft.checkAvailability(quote.tokenId, quote.checkIn, quote.checkOut)) revert InvalidAmount();
 
-        // Check availability
-        if (!nft.checkAvailability(quote.tokenId, quote.checkIn, quote.checkOut, 1)) {
-            revert InvalidAmount(); // Room not available
-        }
-
-        // Get property owner (host)
+        // Get host
         (uint256 propertyId, ) = nft.decodeTokenId(quote.tokenId);
         address host = nft.propertyOwner(propertyId);
+        if (host == address(0) || msg.sender == host) revert InvalidAddress();
 
-        if (host == address(0)) revert InvalidAddress();
-        if (msg.sender == host) revert InvalidAddress(); // Can't book own property
-
-        // 5. Calculate platform fee
+        // Calculate fee
         uint256 fee = (quote.price * platformFeePercent) / FEE_DENOMINATOR;
-        if (fee < minFee) {
-            fee = minFee;
-        }
-
+        if (fee < minFee) fee = minFee;
         if (fee >= quote.price) revert InvalidFee();
 
-        // 6. Transfer payment from traveler to factory
+        // Transfer payment
         IERC20(quote.currency).safeTransferFrom(msg.sender, address(this), quote.price);
 
-        // 7. Create booking in PropertyNFT
-        uint256 bookingIndex = nft.bookRoom(
-            quote.tokenId,
-            msg.sender,
-            quote.checkIn,
-            quote.checkOut,
-            escrowCount // Will be the escrowId
-        );
+        // Create booking first
+        uint256 numGuests = quote.quantity > 0 ? quote.quantity : 2;
+        uint256 bookingIndex = nft.bookRoom(quote.tokenId, quote.checkIn, quote.checkOut, numGuests, address(0));
 
-        // 8. Create TravelEscrow contract
-        TravelEscrow escrow = new TravelEscrow(
-            msg.sender, // traveler
-            host, // host
-            quote.currency, // USDC or EURC
+        // Deploy escrow
+        escrowAddress = escrowDeployer.deployEscrow(
+            msg.sender,
+            host,
+            quote.currency,
             quote.price,
             fee,
             platformWallet,
@@ -192,16 +203,14 @@ contract EscrowFactory is Ownable, Pausable {
             quote.checkOut
         );
 
-        escrowAddress = address(escrow);
+        // Update booking with escrow address
+        nft.setEscrowAddress(quote.tokenId, bookingIndex, escrowAddress);
 
-        // 9. Transfer tokens to escrow
+        // Transfer to escrow
         IERC20(quote.currency).safeTransfer(escrowAddress, quote.price);
 
-        // 10. Register escrow
-        uint256 escrowId = escrowCount++;
-        escrows[escrowId] = escrowAddress;
-        userEscrowIds[msg.sender].push(escrowId);
-        userEscrowIds[host].push(escrowId);
+        // Register in registry
+        escrowRegistry.registerEscrow(escrowAddress, msg.sender, host);
 
         emit EscrowCreated(escrowAddress, msg.sender, host, quote.currency, quote.price);
         emit TravelEscrowCreated(
@@ -217,222 +226,239 @@ contract EscrowFactory is Ownable, Pausable {
         return escrowAddress;
     }
 
-    /**
-     * @notice Verify backend signature on booking quote
-     */
-    function _verifyQuote(BookingQuote calldata quote) internal view {
-        bytes32 messageHash = keccak256(
-            abi.encodePacked(
-                quote.tokenId,
-                quote.checkIn,
-                quote.checkOut,
-                quote.price,
-                quote.currency,
-                quote.validUntil
-            )
+    function createBatchTravelEscrow(
+        BatchBookingQuote calldata quote
+    ) external whenNotPaused returns (address[] memory escrowAddresses) {
+        if (quote.rooms.length == 0) revert EmptyRoomList();
+
+        // Verify batch quote
+        bytes32 roomsHash = QuoteVerifier.hashRoomBookings(
+            _extractTokenIds(quote.rooms),
+            _extractQuantities(quote.rooms),
+            _extractPrices(quote.rooms)
         );
 
-        address signer = ECDSA.recover(messageHash.toEthSignedMessageHash(), quote.signature);
+        if (
+            !QuoteVerifier.verifyBatchQuote(
+                roomsHash,
+                quote.checkIn,
+                quote.checkOut,
+                quote.totalPrice,
+                quote.currency,
+                quote.validUntil,
+                quote.signature,
+                backendSigner,
+                address(this)
+            )
+        ) revert InvalidQuote();
 
-        if (signer != backendSigner) revert InvalidQuote();
+        if (block.timestamp > quote.validUntil) revert QuoteExpired();
+        if (quote.currency != USDC && quote.currency != EURC) revert UnsupportedCurrency();
+
+        IPropertyNFT nft = IPropertyNFT(propertyNFT);
+
+        // Verify all rooms from same property and available
+        (uint256 propertyId, ) = nft.decodeTokenId(quote.rooms[0].tokenId);
+        address host = nft.propertyOwner(propertyId);
+        if (host == address(0) || msg.sender == host) revert InvalidAddress();
+
+        uint256 priceSum = 0;
+        for (uint256 i = 0; i < quote.rooms.length; i++) {
+            (uint256 roomPropertyId, ) = nft.decodeTokenId(quote.rooms[i].tokenId);
+            if (roomPropertyId != propertyId) revert InvalidAddress();
+            if (!nft.checkAvailability(quote.rooms[i].tokenId, quote.checkIn, quote.checkOut)) revert InvalidAmount();
+            priceSum += quote.rooms[i].price;
+        }
+
+        if (priceSum != quote.totalPrice) revert InvalidAmount();
+
+        // Transfer total payment
+        IERC20(quote.currency).safeTransferFrom(msg.sender, address(this), quote.totalPrice);
+
+        // Create batch ID
+        uint256 batchId = escrowRegistry.createBatchId();
+
+        // Create arrays
+        escrowAddresses = new address[](quote.rooms.length);
+        uint256[] memory escrowIds = new uint256[](quote.rooms.length);
+
+        // Create escrow for each room
+        for (uint256 i = 0; i < quote.rooms.length; i++) {
+            RoomBooking calldata room = quote.rooms[i];
+
+            uint256 roomFee = (room.price * platformFeePercent) / FEE_DENOMINATOR;
+            if (roomFee < minFee) roomFee = minFee;
+            if (roomFee >= room.price) revert InvalidFee();
+
+            // Create booking
+            uint256 numGuests = room.quantity > 0 ? room.quantity : 2;
+            uint256 bookingIndex = nft.bookRoom(room.tokenId, quote.checkIn, quote.checkOut, numGuests, address(0));
+
+            // Deploy escrow
+            address escrowAddress = escrowDeployer.deployEscrow(
+                msg.sender,
+                host,
+                quote.currency,
+                room.price,
+                roomFee,
+                platformWallet,
+                admin,
+                backendSigner,
+                propertyNFT,
+                room.tokenId,
+                bookingIndex,
+                quote.checkIn,
+                quote.checkOut
+            );
+
+            // Update booking
+            nft.setEscrowAddress(room.tokenId, bookingIndex, escrowAddress);
+
+            // Transfer to escrow
+            IERC20(quote.currency).safeTransfer(escrowAddress, room.price);
+
+            // Register
+            uint256 escrowId = escrowRegistry.registerEscrow(escrowAddress, msg.sender, host);
+            escrowRegistry.registerBatchEscrow(escrowId, batchId);
+
+            escrowAddresses[i] = escrowAddress;
+            escrowIds[i] = escrowId;
+
+            emit EscrowCreated(escrowAddress, msg.sender, host, quote.currency, room.price);
+            emit TravelEscrowCreated(
+                escrowAddress,
+                room.tokenId,
+                msg.sender,
+                quote.currency,
+                room.price,
+                quote.checkIn,
+                quote.checkOut
+            );
+        }
+
+        emit BatchBookingCreated(
+            batchId,
+            msg.sender,
+            quote.currency,
+            quote.totalPrice,
+            quote.checkIn,
+            quote.checkOut,
+            quote.rooms.length,
+            escrowIds
+        );
+
+        return escrowAddresses;
     }
 
-    // ============ Admin Functions ============
+    /*//////////////////////////////////////////////////////////////
+                        HELPER FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
-    /**
-     * @notice Set platform fee percentage
-     * @param newFeePercent New fee percentage (base 10000, e.g. 750 = 7.5%)
-     */
-    function setPlatformFee(uint256 newFeePercent) external onlyOwner {
-        if (newFeePercent > 1000) revert InvalidFee(); // Max 10%
-        uint256 oldFee = platformFeePercent;
-        platformFeePercent = newFeePercent;
-        emit PlatformFeeUpdated(oldFee, newFeePercent);
+    function _extractTokenIds(RoomBooking[] calldata rooms) private pure returns (uint256[] memory) {
+        uint256[] memory tokenIds = new uint256[](rooms.length);
+        for (uint256 i = 0; i < rooms.length; i++) {
+            tokenIds[i] = rooms[i].tokenId;
+        }
+        return tokenIds;
     }
 
-    /**
-     * @notice Set minimum fee amount
-     * @param _minFee New minimum fee (in stablecoin decimals)
-     */
-    function setMinFee(uint256 _minFee) external onlyOwner {
-        uint256 oldMinFee = minFee;
-        minFee = _minFee;
-        emit MinFeeUpdated(oldMinFee, _minFee);
+    function _extractQuantities(RoomBooking[] calldata rooms) private pure returns (uint256[] memory) {
+        uint256[] memory quantities = new uint256[](rooms.length);
+        for (uint256 i = 0; i < rooms.length; i++) {
+            quantities[i] = rooms[i].quantity;
+        }
+        return quantities;
     }
 
-    /**
-     * @notice Set platform wallet address
-     * @param newWallet New wallet address
-     */
-    function setPlatformWallet(address newWallet) external onlyOwner {
-        if (newWallet == address(0)) revert InvalidAddress();
-        address oldWallet = platformWallet;
-        platformWallet = newWallet;
-        emit PlatformWalletUpdated(oldWallet, newWallet);
+    function _extractPrices(RoomBooking[] calldata rooms) private pure returns (uint256[] memory) {
+        uint256[] memory prices = new uint256[](rooms.length);
+        for (uint256 i = 0; i < rooms.length; i++) {
+            prices[i] = rooms[i].price;
+        }
+        return prices;
     }
 
-    /**
-     * @notice Set admin address (dispute resolver)
-     * @param newAdmin New admin address
-     */
-    function setAdmin(address newAdmin) external onlyOwner {
-        if (newAdmin == address(0)) revert InvalidAddress();
-        address oldAdmin = admin;
-        admin = newAdmin;
-        emit AdminUpdated(oldAdmin, newAdmin);
+    /*//////////////////////////////////////////////////////////////
+                        VIEW FUNCTIONS (delegate to Registry)
+    //////////////////////////////////////////////////////////////*/
+
+    function getUserEscrows(address user) external view returns (uint256[] memory) {
+        return escrowRegistry.getUserEscrows(user);
     }
 
-    /**
-     * @notice Set backend signer address
-     * @param newSigner New backend signer address
-     */
-    function setBackendSigner(address newSigner) external onlyOwner {
-        if (newSigner == address(0)) revert InvalidAddress();
-        address oldSigner = backendSigner;
-        backendSigner = newSigner;
-        emit BackendSignerUpdated(oldSigner, newSigner);
+    function getBatchEscrows(uint256 batchId) external view returns (uint256[] memory) {
+        return escrowRegistry.getBatchEscrows(batchId);
     }
 
-    /**
-     * @notice Set PropertyNFT contract address
-     * @param newPropertyNFT New PropertyNFT address
-     */
-    function setPropertyNFT(address newPropertyNFT) external onlyOwner {
-        if (newPropertyNFT == address(0)) revert InvalidAddress();
-        address oldPropertyNFT = propertyNFT;
-        propertyNFT = newPropertyNFT;
-        emit PropertyNFTUpdated(oldPropertyNFT, newPropertyNFT);
+    function escrows(uint256 escrowId) external view returns (address) {
+        return escrowRegistry.escrows(escrowId);
     }
 
-    /**
-     * @notice Update USDC address
-     */
-    function setUSDC(address _USDC) external onlyOwner {
-        if (_USDC == address(0)) revert InvalidAddress();
-        USDC = _USDC;
-        emit CurrencyUpdated(_USDC, "USDC");
+    function escrowCount() external view returns (uint256) {
+        return escrowRegistry.totalEscrows();
     }
 
-    /**
-     * @notice Update EURC address
-     */
-    function setEURC(address _EURC) external onlyOwner {
-        if (_EURC == address(0)) revert InvalidAddress();
-        EURC = _EURC;
-        emit CurrencyUpdated(_EURC, "EURC");
+    function batchCount() external view returns (uint256) {
+        return escrowRegistry.totalBatches();
     }
 
-    /**
-     * @notice Pause contract
-     */
+    /*//////////////////////////////////////////////////////////////
+                        ADMIN FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    function setPlatformFee(uint256 _newFee) external onlyOwner {
+        platformFeePercent = _newFee;
+    }
+
+    function setMinFee(uint256 _newMinFee) external onlyOwner {
+        minFee = _newMinFee;
+    }
+
+    function setPlatformWallet(address _newWallet) external onlyOwner {
+        if (_newWallet == address(0)) revert InvalidAddress();
+        platformWallet = _newWallet;
+    }
+
+    function setAdmin(address _newAdmin) external onlyOwner {
+        if (_newAdmin == address(0)) revert InvalidAddress();
+        admin = _newAdmin;
+    }
+
+    function setBackendSigner(address _newSigner) external onlyOwner {
+        if (_newSigner == address(0)) revert InvalidAddress();
+        backendSigner = _newSigner;
+    }
+
+    function setPropertyNFT(address _newPropertyNFT) external onlyOwner {
+        if (_newPropertyNFT == address(0)) revert InvalidAddress();
+        propertyNFT = _newPropertyNFT;
+    }
+
+    function setUSDC(address _newUSDC) external onlyOwner {
+        if (_newUSDC == address(0)) revert InvalidAddress();
+        USDC = _newUSDC;
+    }
+
+    function setEURC(address _newEURC) external onlyOwner {
+        if (_newEURC == address(0)) revert InvalidAddress();
+        EURC = _newEURC;
+    }
+
+    function setEscrowRegistry(address _escrowRegistry) external onlyOwner {
+        if (_escrowRegistry == address(0)) revert InvalidAddress();
+        escrowRegistry = EscrowRegistry(_escrowRegistry);
+    }
+
+    function setEscrowDeployer(address _escrowDeployer) external onlyOwner {
+        if (_escrowDeployer == address(0)) revert InvalidAddress();
+        escrowDeployer = EscrowDeployer(_escrowDeployer);
+    }
+
     function pause() external onlyOwner {
         _pause();
     }
 
-    /**
-     * @notice Unpause contract
-     */
     function unpause() external onlyOwner {
         _unpause();
-    }
-
-    // ============ View Functions ============
-
-    /**
-     * @notice Get user's escrow addresses
-     * @param user User address
-     * @return Array of escrow addresses
-     */
-    function getUserEscrows(address user) external view returns (address[] memory) {
-        uint256[] memory ids = userEscrowIds[user];
-        address[] memory userEscrows = new address[](ids.length);
-
-        for (uint256 i = 0; i < ids.length; i++) {
-            userEscrows[i] = escrows[ids[i]];
-        }
-
-        return userEscrows;
-    }
-
-    /**
-     * @notice Get escrow address by ID
-     * @param escrowId Escrow ID
-     * @return Escrow address
-     */
-    function getEscrowAddress(uint256 escrowId) external view returns (address) {
-        return escrows[escrowId];
-    }
-
-    /**
-     * @notice Calculate fee for a given amount
-     * @param amount Amount to calculate fee for
-     * @return Fee amount
-     */
-    function calculateFee(uint256 amount) external view returns (uint256) {
-        uint256 fee = (amount * platformFeePercent) / FEE_DENOMINATOR;
-        return fee < minFee ? minFee : fee;
-    }
-
-    /**
-     * @notice Get TravelEscrow details
-     * @param escrowAddress TravelEscrow contract address
-     */
-    function getTravelEscrowDetails(
-        address escrowAddress
-    )
-        external
-        view
-        returns (
-            address traveler,
-            address host,
-            address token,
-            uint256 amount,
-            uint256 tokenId,
-            uint256 checkIn,
-            uint256 checkOut,
-            uint8 status,
-            uint8 preference,
-            bool withdrawn
-        )
-    {
-        TravelEscrow escrow = TravelEscrow(payable(escrowAddress));
-
-        TravelEscrow.Status escrowStatus;
-        TravelEscrow.PaymentPreference paymentPref;
-
-        (traveler, host, token, amount, tokenId, checkIn, checkOut, escrowStatus, paymentPref, withdrawn) = escrow
-            .getDetails();
-
-        status = uint8(escrowStatus);
-        preference = uint8(paymentPref);
-
-        return (traveler, host, token, amount, tokenId, checkIn, checkOut, status, preference, withdrawn);
-    }
-
-    /**
-     * @notice Verify a booking quote without executing
-     * @param quote Booking quote to verify
-     * @return isValid Whether quote is valid
-     */
-    function verifyQuote(BookingQuote calldata quote) external view returns (bool isValid) {
-        try this._verifyQuoteExternal(quote) {
-            return true;
-        } catch {
-            return false;
-        }
-    }
-
-    /**
-     * @notice External wrapper for quote verification (for try/catch)
-     */
-    function _verifyQuoteExternal(BookingQuote calldata quote) external view {
-        _verifyQuote(quote);
-    }
-
-    /**
-     * @notice Check if currency is supported
-     */
-    function isCurrencySupported(address currency) external view returns (bool) {
-        return currency == USDC || currency == EURC;
     }
 }

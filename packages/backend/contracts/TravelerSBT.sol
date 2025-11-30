@@ -74,6 +74,12 @@ contract TravelerSBT is ERC721, Ownable {
     event TravelerSuspended(address indexed traveler, uint256 indexed tokenId);
     event TravelerUnsuspended(address indexed traveler, uint256 indexed tokenId);
     event AuthorizedUpdaterSet(address indexed updater, bool authorized);
+    event BookingLinked(
+        address indexed traveler,
+        uint256 indexed sbtTokenId,
+        uint256 roomTokenId,
+        uint256 bookingIndex
+    );
 
     /*//////////////////////////////////////////////////////////////
                                 ERRORS
@@ -185,6 +191,24 @@ contract TravelerSBT is ERC721, Ownable {
         }
 
         emit ReputationUpdated(traveler, tokenId, profile.averageRating, profile.tier);
+    }
+
+    /**
+     * @notice Link a booking to a traveler's profile
+     * @param traveler Address of the traveler
+     * @param tokenId The room type token ID
+     * @param bookingIndex Index of the booking
+     */
+    function linkBooking(address traveler, uint256 tokenId, uint256 bookingIndex) external {
+        if (!authorizedUpdaters[msg.sender]) revert NotAuthorized();
+
+        uint256 sbtTokenId = walletToTokenId[traveler];
+        if (sbtTokenId == 0) revert NoSBT();
+
+        TravelerProfile storage profile = profiles[sbtTokenId];
+        profile.lastActivityTimestamp = block.timestamp;
+
+        emit BookingLinked(traveler, sbtTokenId, tokenId, bookingIndex);
     }
 
     /**

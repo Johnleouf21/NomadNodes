@@ -1,6 +1,11 @@
 import { expect } from "chai";
 import { network } from "hardhat";
-import type { ReviewRegistry, TravelerSBT, HostSBT, PropertyNFT } from "../types/ethers-contracts";
+import type {
+  ReviewRegistry,
+  TravelerSBT,
+  HostSBT,
+  PropertyRegistry,
+} from "../types/ethers-contracts";
 
 const { ethers } = await network.connect();
 
@@ -8,7 +13,7 @@ describe("ReviewRegistry", function () {
   let reviewRegistry: ReviewRegistry;
   let travelerSBT: TravelerSBT;
   let hostSBT: HostSBT;
-  let propertyNFT: PropertyNFT;
+  let propertyRegistry: PropertyRegistry;
   let owner: Awaited<ReturnType<typeof ethers.getSigners>>[0];
   let moderator: Awaited<ReturnType<typeof ethers.getSigners>>[0];
   let traveler: Awaited<ReturnType<typeof ethers.getSigners>>[0];
@@ -27,28 +32,29 @@ describe("ReviewRegistry", function () {
     const HostSBTFactory = await ethers.getContractFactory("HostSBT");
     hostSBT = (await HostSBTFactory.deploy()) as unknown as HostSBT;
 
-    // Deploy PropertyNFT
-    const PropertyNFTFactory = await ethers.getContractFactory("PropertyNFT");
-    propertyNFT = (await PropertyNFTFactory.deploy(
+    // Deploy PropertyRegistry (minimal setup without full modular architecture)
+    const PropertyRegistryFactory = await ethers.getContractFactory("PropertyRegistry");
+    propertyRegistry = (await PropertyRegistryFactory.deploy(
       await hostSBT.getAddress(),
-      owner.address
-    )) as unknown as PropertyNFT;
+      owner.address // platform
+    )) as unknown as PropertyRegistry;
 
-    // Authorize PropertyNFT to update HostSBT
-    await hostSBT.setAuthorizedUpdater(await propertyNFT.getAddress(), true);
-
-    // Deploy ReviewRegistry
+    // Deploy ReviewRegistry (with ZeroAddress for propertyNFT since not needed)
     const ReviewRegistryFactory = await ethers.getContractFactory("ReviewRegistry");
     reviewRegistry = (await ReviewRegistryFactory.deploy(
       await travelerSBT.getAddress(),
       await hostSBT.getAddress(),
-      await propertyNFT.getAddress()
+      ethers.ZeroAddress, // propertyNFT not needed for review tests
+      await propertyRegistry.getAddress()
     )) as unknown as ReviewRegistry;
 
-    // Authorize ReviewRegistry to update SBTs and PropertyNFT
+    // Authorize ReviewRegistry and PropertyRegistry to update SBTs
     await travelerSBT.setAuthorizedUpdater(await reviewRegistry.getAddress(), true);
     await hostSBT.setAuthorizedUpdater(await reviewRegistry.getAddress(), true);
-    await propertyNFT.setReviewRegistry(await reviewRegistry.getAddress());
+    await hostSBT.setAuthorizedUpdater(await propertyRegistry.getAddress(), true);
+
+    // Set ReviewRegistry in PropertyRegistry
+    await propertyRegistry.setReviewRegistry(await reviewRegistry.getAddress());
 
     // Add moderator
     await reviewRegistry.setModerator(moderator.address, true);
@@ -61,7 +67,8 @@ describe("ReviewRegistry", function () {
     it("should deploy with correct addresses", async function () {
       expect(await reviewRegistry.travelerSBT()).to.equal(await travelerSBT.getAddress());
       expect(await reviewRegistry.hostSBT()).to.equal(await hostSBT.getAddress());
-      expect(await reviewRegistry.propertyNFT()).to.equal(await propertyNFT.getAddress());
+      expect(await reviewRegistry.propertyNFT()).to.equal(ethers.ZeroAddress);
+      expect(await reviewRegistry.propertyRegistry()).to.equal(await propertyRegistry.getAddress());
     });
 
     it("should set deployer as moderator", async function () {
@@ -80,6 +87,9 @@ describe("ReviewRegistry", function () {
       // Mint SBTs for traveler and host
       await travelerSBT.mint(traveler.address);
       await hostSBT.mint(host.address);
+
+      // Create a property for reviews
+      await propertyRegistry.connect(host).createProperty("ipfs://property", "hotel", "Paris");
     });
 
     it("should publish review from traveler to host", async function () {
@@ -388,11 +398,17 @@ describe("ReviewRegistry", function () {
 
   describe("Admin Functions", function () {
     it("should update contract addresses", async function () {
-      await reviewRegistry.setContracts(voter1.address, voter2.address, moderator.address);
+      await reviewRegistry.setContracts(
+        voter1.address,
+        voter2.address,
+        moderator.address,
+        owner.address
+      );
 
       expect(await reviewRegistry.travelerSBT()).to.equal(voter1.address);
       expect(await reviewRegistry.hostSBT()).to.equal(voter2.address);
       expect(await reviewRegistry.propertyNFT()).to.equal(moderator.address);
+      expect(await reviewRegistry.propertyRegistry()).to.equal(owner.address);
     });
 
     it("should update ReviewValidator", async function () {
