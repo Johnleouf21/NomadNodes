@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { network } from "hardhat";
-import { keccak256, solidityPacked, Wallet } from "ethers";
+import { keccak256, solidityPacked, Wallet, HDNodeWallet } from "ethers";
 import type {
   EscrowFactory,
   EscrowRegistry,
@@ -37,7 +37,7 @@ describe("EscrowFactory", function () {
   let admin: Awaited<ReturnType<typeof ethers.getSigners>>[0];
   let host: Awaited<ReturnType<typeof ethers.getSigners>>[0];
   let traveler: Awaited<ReturnType<typeof ethers.getSigners>>[0];
-  let backendSigner: Wallet;
+  let backendSigner: HDNodeWallet;
 
   let tokenId: bigint;
   let checkIn: number;
@@ -726,7 +726,7 @@ describe("EscrowFactory", function () {
         [],
         checkIn,
         checkOut,
-        0,
+        0n,
         await usdc.getAddress(),
         validUntil,
         await escrowFactory.getAddress()

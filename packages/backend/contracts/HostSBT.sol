@@ -179,8 +179,7 @@ contract HostSBT is ERC721, Ownable {
             profile.averageResponseTime = responseTime;
         } else {
             profile.averageResponseTime =
-                (profile.averageResponseTime * oldTotal + responseTime) /
-                profile.totalReviewsReceived;
+                (profile.averageResponseTime * oldTotal + responseTime) / profile.totalReviewsReceived;
         }
 
         // Update tier
