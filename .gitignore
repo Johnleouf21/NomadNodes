@@ -60,3 +60,11 @@ coverage.json
 # Misc
 *.tsbuildinfo
 .eslintcache
+packages/backend/contracts/legacy/AvailabilityLogic.sol.bak
+packages/backend/contracts/legacy/BookingLogic.sol.bak
+packages/backend/contracts/legacy/EscrowCreationFacet.sol.bak
+packages/backend/contracts/legacy/EscrowFactory.sol.bak
+packages/backend/contracts/legacy/PropertyManagement.sol.bak
+packages/backend/contracts/legacy/PropertyNFT.sol.bak
+packages/backend/contracts/legacy/SearchLogic.sol.bak
+packages/backend/contracts/legacy/ValidationLibrary.sol.bak
