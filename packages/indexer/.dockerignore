@@ -1,0 +1,43 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Environment files
+.env
+.env.local
+.env*.local
+
+# Ponder generated files
+.ponder
+generated
+
+# Build artifacts
+dist
+build
+
+# Logs
+*.log
+logs
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+!README.md
+
+# Tests
+*.test.ts
+*.spec.ts

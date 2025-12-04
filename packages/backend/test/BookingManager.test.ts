@@ -358,15 +358,15 @@ describe("BookingManager", function () {
         .true;
     });
 
-    it("should not release availability for pending booking", async function () {
+    it("should release availability for pending booking", async function () {
       const booking = await bookingManager.getBooking(tokenId, 0);
       const unitIndex = booking.unitIndex;
 
       await bookingManager.connect(traveler).cancelBooking(tokenId, 0);
 
-      // Unit should still be unavailable (wasn't released because status was Pending)
+      // Unit should be available again (availability is released regardless of booking status)
       expect(await availabilityManager.isRoomAvailable(tokenId, unitIndex, checkIn, checkOut)).to.be
-        .false;
+        .true;
     });
 
     it("should revert if booking completed", async function () {

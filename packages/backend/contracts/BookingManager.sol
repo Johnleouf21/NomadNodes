@@ -255,8 +255,13 @@ contract BookingManager is Ownable {
         PropertyTypes.BookingStatus oldStatus = booking.status;
         booking.status = PropertyTypes.BookingStatus.Cancelled;
 
-        // Release availability if booking was confirmed or checked in
-        if (oldStatus == PropertyTypes.BookingStatus.Confirmed || oldStatus == PropertyTypes.BookingStatus.CheckedIn) {
+        // Release availability - always restore since availability was taken at booking creation
+        // regardless of status (Pending, Confirmed, or CheckedIn)
+        if (
+            oldStatus == PropertyTypes.BookingStatus.Pending ||
+            oldStatus == PropertyTypes.BookingStatus.Confirmed ||
+            oldStatus == PropertyTypes.BookingStatus.CheckedIn
+        ) {
             availabilityManager.setAvailability(
                 tokenId,
                 booking.unitIndex,

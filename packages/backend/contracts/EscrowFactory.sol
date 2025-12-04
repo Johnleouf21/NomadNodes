@@ -317,6 +317,9 @@ contract EscrowFactory is Ownable, Pausable {
             // Transfer to escrow
             IERC20(quote.currency).safeTransfer(escrowAddress, room.price);
 
+            // Confirm booking (funds received)
+            nft.confirmBooking(room.tokenId, bookingIndex);
+
             // Register
             uint256 escrowId = escrowRegistry.registerEscrow(escrowAddress, msg.sender, host);
             escrowRegistry.registerBatchEscrow(escrowId, batchId);

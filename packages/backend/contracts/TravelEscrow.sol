@@ -67,8 +67,8 @@ contract TravelEscrow is ReentrancyGuard {
     address public backendSigner;
 
     // Timeline constants (CHANGED: Based on checkIn instead of checkOut)
-    uint256 public constant GUEST_GRACE_PERIOD = 24 hours; // After checkIn
-    uint256 public constant AUTO_RELEASE_DELAY = 48 hours; // After checkIn
+    uint256 public constant GUEST_GRACE_PERIOD = 4 hours; // After checkIn - reduced for short stays
+    uint256 public constant AUTO_RELEASE_DELAY = 12 hours; // After checkIn - reduced for 1-night stays
     uint256 public constant MAX_DISPUTE_WINDOW = 7 days; // After checkOut
 
     // Timestamps
@@ -205,7 +205,7 @@ contract TravelEscrow is ReentrancyGuard {
     // ============ INTELLIGENT TIMELINE (CHANGED: Based on checkIn) ============
 
     /**
-     * @notice Traveler confirms their stay (24h after checkIn)
+     * @notice Traveler confirms their stay (4h after checkIn)
      * @dev Releases funds to host after confirmation
      */
     function confirmStay() external onlyTraveler inStatus(Status.Pending) nonReentrant {
@@ -221,11 +221,11 @@ contract TravelEscrow is ReentrancyGuard {
     }
 
     /**
-     * @notice Auto-release funds to host (48h after checkIn if no dispute)
+     * @notice Auto-release funds to host (12h after checkIn if no dispute)
      * @dev Anyone can trigger this (permissionless)
      */
     function autoReleaseToHost() external inStatus(Status.Pending) nonReentrant {
-        // Must be 48h after checkIn
+        // Must be 12h after checkIn
         if (block.timestamp < checkIn + AUTO_RELEASE_DELAY) {
             revert TooEarlyForAction();
         }

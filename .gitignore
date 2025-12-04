@@ -68,3 +68,5 @@ packages/backend/contracts/legacy/PropertyManagement.sol.bak
 packages/backend/contracts/legacy/PropertyNFT.sol.bak
 packages/backend/contracts/legacy/SearchLogic.sol.bak
 packages/backend/contracts/legacy/ValidationLibrary.sol.bak
+packages/indexer/.env.example
+.env.example

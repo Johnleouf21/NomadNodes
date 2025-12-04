@@ -55,6 +55,63 @@ contract AvailabilityManager is Ownable {
     //////////////////////////////////////////////////////////////*/
 
     /**
+     * @notice Set availability for multiple units over a date range
+     * @param tokenId The room type token ID
+     * @param numUnitsAvailable Number of units to mark as available (0 to totalSupply)
+     * @param startDate Unix timestamp for start date
+     * @param endDate Unix timestamp for end date
+     * @dev Sets units 0 to numUnitsAvailable-1 as available, rest as unavailable
+     */
+    function setBulkAvailability(
+        uint256 tokenId,
+        uint256 numUnitsAvailable,
+        uint256 startDate,
+        uint256 endDate
+    ) external {
+        (uint256 propertyId, ) = roomTypeNFT.decodeTokenId(tokenId);
+
+        // Only property owner can set bulk availability
+        (bool success, bytes memory data) = address(roomTypeNFT).staticcall(
+            abi.encodeWithSignature("propertyRegistry()")
+        );
+        require(success, "Failed to get property registry");
+        address propertyRegistry = abi.decode(data, (address));
+
+        (success, data) = propertyRegistry.staticcall(
+            abi.encodeWithSignature("isPropertyOwner(uint256,address)", propertyId, msg.sender)
+        );
+        require(success && abi.decode(data, (bool)), "Not property owner");
+
+        if (startDate >= endDate) revert InvalidDateRange();
+
+        // Get total supply from RoomTypeNFT
+        (success, data) = address(roomTypeNFT).staticcall(abi.encodeWithSignature("getRoomType(uint256)", tokenId));
+        require(success, "Failed to get room type");
+
+        uint256 totalSupply;
+        assembly {
+            totalSupply := mload(add(data, 256))
+        }
+
+        require(numUnitsAvailable <= totalSupply, "Exceeds total supply");
+
+        // Normalize to start of day
+        startDate = (startDate / 1 days) * 1 days;
+        endDate = (endDate / 1 days) * 1 days;
+
+        // Set availability for each unit
+        for (uint256 i = 0; i < totalSupply; i++) {
+            bool available = i < numUnitsAvailable;
+            uint256 currentDate = startDate;
+            while (currentDate < endDate) {
+                _setDayAvailability(tokenId, i, currentDate, available);
+                currentDate += 1 days;
+            }
+            emit AvailabilitySet(tokenId, i, startDate, endDate, available);
+        }
+    }
+
+    /**
      * @notice Set availability for a specific room unit over a date range
      * @param tokenId The room type token ID
      * @param unitIndex The specific unit (0 to totalSupply-1)
