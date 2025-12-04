@@ -1,0 +1,493 @@
+/**
+ * Hook for creating and managing properties with PropertyNFT contract
+ */
+
+import * as React from 'react'
+import { useWriteContract, useWaitForTransactionReceipt, useReadContract, usePublicClient } from 'wagmi'
+import { CONTRACTS } from '@/lib/contracts'
+import { decodeEventLog } from 'viem'
+import type { Address } from 'viem'
+
+// Type definitions
+export interface PropertyMetadata {
+  name: string
+  description: string
+  propertyType: 'hotel' | 'villa' | 'apartment' | 'cabin'
+  location: string
+  country: string
+  city: string
+  address: string
+  coordinates?: {
+    lat: number
+    lng: number
+  }
+  images: string[] // IPFS hashes or URLs
+  amenities: string[]
+  houseRules: string[]
+}
+
+// Smart contract Property structure
+export interface PropertyData {
+  propertyId: bigint
+  hostWallet: string
+  hostSbtTokenId: bigint
+  isActive: boolean
+  totalBookings: bigint
+  averageRating: bigint
+  totalReviewsReceived: bigint
+  createdAt: bigint
+  lastBookingTimestamp: bigint
+  propertyType: string
+  location: string
+  ipfsMetadataHash: string
+}
+
+export interface RoomTypeData {
+  name: string
+  description: string
+  maxSupply: number
+  pricePerNight: string // in ETH
+  maxGuests: number
+  amenities: string[]
+  images: string[]
+}
+
+interface UseCreatePropertyOptions {
+  onSuccess?: (propertyId: bigint) => void
+  onError?: (error: string) => void
+}
+
+export function useCreateProperty({ onSuccess, onError }: UseCreatePropertyOptions = {}) {
+  const publicClient = usePublicClient()
+  const [step, setStep] = React.useState<'idle' | 'uploading' | 'creating' | 'adding_rooms' | 'complete'>('idle')
+  const [error, setError] = React.useState<string | null>(null)
+  const [propertyId, setPropertyId] = React.useState<bigint | null>(null)
+  const [roomTypesData, setRoomTypesData] = React.useState<RoomTypeData[]>([])
+  const [processedRoomHashes, setProcessedRoomHashes] = React.useState<Set<string>>(new Set())
+
+  // Create property transaction
+  const {
+    writeContract: writeCreateProperty,
+    data: createTxHash,
+    isPending: isCreatePending,
+    error: createError,
+    reset: resetCreate,
+  } = useWriteContract()
+
+  // Add room type transaction
+  const {
+    writeContract: writeAddRoomType,
+    data: roomTxHash,
+    isPending: isRoomPending,
+    error: roomError,
+    reset: resetRoom,
+  } = useWriteContract()
+
+  const {
+    isLoading: isCreateTxLoading,
+    isSuccess: isCreateTxSuccess,
+    data: createReceipt,
+  } = useWaitForTransactionReceipt({
+    hash: createTxHash,
+  })
+
+  const {
+    isLoading: isRoomTxLoading,
+    isSuccess: isRoomTxSuccess,
+  } = useWaitForTransactionReceipt({
+    hash: roomTxHash,
+  })
+
+  // Handle create property errors
+  React.useEffect(() => {
+    if (createError) {
+      const errorMsg = createError.message || 'Failed to create property'
+      setError(errorMsg)
+      setStep('idle')
+      onError?.(errorMsg)
+    }
+  }, [createError, onError])
+
+  // Handle room type errors
+  React.useEffect(() => {
+    if (roomError) {
+      const errorMsg = roomError.message || 'Failed to add room type'
+      setError(errorMsg)
+      setStep('idle')
+      onError?.(errorMsg)
+    }
+  }, [roomError, onError])
+
+  // Extract propertyId from PropertyCreated event
+  React.useEffect(() => {
+    if (isCreateTxSuccess && createReceipt && publicClient) {
+      const logs = createReceipt.logs
+
+      // Find PropertyCreated event
+      for (const log of logs) {
+        try {
+          const decoded = decodeEventLog({
+            abi: CONTRACTS.propertyNFT.abi,
+            data: log.data,
+            topics: log.topics,
+          })
+
+          if (decoded.eventName === 'PropertyCreated') {
+            const propId = (decoded.args as any).propertyId as bigint
+            setPropertyId(propId)
+
+            // Start adding room types if we have any
+            if (roomTypesData.length > 0) {
+              setStep('adding_rooms')
+            } else {
+              setStep('complete')
+              onSuccess?.(propId)
+            }
+            break
+          }
+        } catch (e) {
+          // Not the event we're looking for
+          continue
+        }
+      }
+    }
+  }, [isCreateTxSuccess, createReceipt, publicClient, roomTypesData.length, onSuccess])
+
+  // Add next room type when ready
+  React.useEffect(() => {
+    if (
+      step === 'adding_rooms' &&
+      propertyId &&
+      !isRoomPending &&
+      !isRoomTxLoading &&
+      !roomTxHash // No pending transaction
+    ) {
+      // Find next room that hasn't been processed
+      const nextRoomIndex = roomTypesData.findIndex((_, idx) => {
+        const roomKey = `${propertyId.toString()}-${idx}`
+        return !processedRoomHashes.has(roomKey)
+      })
+
+      if (nextRoomIndex !== -1) {
+        const room = roomTypesData[nextRoomIndex]
+        const roomKey = `${propertyId.toString()}-${nextRoomIndex}`
+
+        // Mark as being processed
+        setProcessedRoomHashes(prev => new Set(prev).add(roomKey))
+
+        // Upload room metadata to IPFS (placeholder for now)
+        const ipfsHash = 'QmPlaceholder'
+
+        writeAddRoomType({
+          ...CONTRACTS.propertyNFT,
+          functionName: 'addRoomType',
+          args: [
+            propertyId,
+            room.name,
+            BigInt(room.maxSupply),
+            ipfsHash,
+          ],
+        })
+      } else {
+        // All rooms processed
+        setStep('complete')
+        if (propertyId) {
+          onSuccess?.(propertyId)
+        }
+      }
+    }
+  }, [step, propertyId, roomTypesData, processedRoomHashes, isRoomPending, isRoomTxLoading, roomTxHash, writeAddRoomType, onSuccess])
+
+  // Reset transaction hash after success to trigger next room
+  React.useEffect(() => {
+    if (isRoomTxSuccess && step === 'adding_rooms') {
+      // Reset to allow next room to be processed
+      resetRoom()
+    }
+  }, [isRoomTxSuccess, step, resetRoom])
+
+  const createProperty = React.useCallback(
+    async (metadata: PropertyMetadata, roomTypes: RoomTypeData[]) => {
+      setError(null)
+      setStep('uploading')
+      setRoomTypesData(roomTypes)
+      setProcessedRoomHashes(new Set())
+
+      try {
+        // Step 1: Upload property metadata to IPFS
+        // TODO: Implement real IPFS upload
+        const ipfsHash = 'QmPlaceholder'
+
+        setStep('creating')
+
+        // Step 2: Create property on blockchain
+        writeCreateProperty({
+          ...CONTRACTS.propertyNFT,
+          functionName: 'createProperty',
+          args: [
+            ipfsHash,
+            metadata.propertyType,
+            `${metadata.city}, ${metadata.country}`,
+          ],
+        })
+
+        // Steps 3+: Room types will be added automatically via useEffect
+      } catch (err: any) {
+        const errorMsg = err?.message || 'Failed to create property'
+        setError(errorMsg)
+        setStep('idle')
+        onError?.(errorMsg)
+      }
+    },
+    [writeCreateProperty, onError]
+  )
+
+  const reset = React.useCallback(() => {
+    setStep('idle')
+    setError(null)
+    setPropertyId(null)
+    setRoomTypesData([])
+    setProcessedRoomHashes(new Set())
+    resetCreate()
+    resetRoom()
+  }, [resetCreate, resetRoom])
+
+  // Calculate current room index for display
+  const currentRoomIndex = processedRoomHashes.size > 0 ? processedRoomHashes.size - 1 : 0
+
+  return {
+    createProperty,
+    reset,
+    step,
+    error,
+    propertyId,
+    currentRoomIndex,
+    totalRooms: roomTypesData.length,
+    isCreating: isCreatePending || isCreateTxLoading || isRoomPending || isRoomTxLoading || step === 'adding_rooms',
+    isSuccess: step === 'complete',
+  }
+}
+
+interface UseAddRoomTypeOptions {
+  propertyId: bigint
+  onSuccess?: () => void
+  onError?: (error: string) => void
+}
+
+export function useAddRoomType({ propertyId, onSuccess, onError }: UseAddRoomTypeOptions) {
+  const [step, setStep] = React.useState<'idle' | 'uploading' | 'adding' | 'complete'>('idle')
+  const [error, setError] = React.useState<string | null>(null)
+
+  const {
+    writeContract: writeAddRoomType,
+    data: txHash,
+    isPending,
+    error: contractError,
+    reset: resetAdd,
+  } = useWriteContract()
+
+  const {
+    isLoading: isTxLoading,
+    isSuccess: isTxSuccess,
+  } = useWaitForTransactionReceipt({
+    hash: txHash,
+  })
+
+  React.useEffect(() => {
+    if (contractError) {
+      const errorMsg = contractError.message || 'Failed to add room type'
+      setError(errorMsg)
+      setStep('idle')
+      onError?.(errorMsg)
+    }
+  }, [contractError, onError])
+
+  React.useEffect(() => {
+    if (isTxSuccess) {
+      setStep('complete')
+      onSuccess?.()
+    }
+  }, [isTxSuccess, onSuccess])
+
+  const addRoomType = React.useCallback(
+    async (roomData: RoomTypeData) => {
+      setError(null)
+      setStep('uploading')
+
+      try {
+        // Upload room metadata to IPFS
+        const ipfsHash = 'QmPlaceholder' // Placeholder
+
+        setStep('adding')
+
+        // Call smart contract
+        writeAddRoomType({
+          ...CONTRACTS.propertyNFT,
+          functionName: 'addRoomType',
+          args: [
+            propertyId,
+            roomData.name,
+            BigInt(roomData.maxSupply),
+            ipfsHash,
+          ],
+        })
+      } catch (err: any) {
+        const errorMsg = err?.message || 'Failed to add room type'
+        setError(errorMsg)
+        setStep('idle')
+        onError?.(errorMsg)
+      }
+    },
+    [propertyId, writeAddRoomType, onError]
+  )
+
+  const reset = React.useCallback(() => {
+    setStep('idle')
+    setError(null)
+    resetAdd()
+  }, [resetAdd])
+
+  return {
+    addRoomType,
+    reset,
+    step,
+    error,
+    isAdding: isPending || isTxLoading,
+    isSuccess: step === 'complete',
+  }
+}
+
+// Read hooks
+export function usePropertyById(propertyId: bigint | undefined) {
+  return useReadContract({
+    ...CONTRACTS.propertyNFT,
+    functionName: 'getProperty',
+    args: propertyId ? [propertyId] : undefined,
+    query: {
+      enabled: !!propertyId && propertyId > 0n,
+    },
+  })
+}
+
+export function usePropertyRoomTypes(propertyId: bigint | undefined) {
+  return useReadContract({
+    ...CONTRACTS.propertyNFT,
+    functionName: 'getPropertyRoomTypes',
+    args: propertyId ? [propertyId] : undefined,
+    query: {
+      enabled: !!propertyId && propertyId > 0n,
+    },
+  })
+}
+
+export function useRoomTypeById(tokenId: bigint | undefined) {
+  return useReadContract({
+    ...CONTRACTS.propertyNFT,
+    functionName: 'getRoomType',
+    args: tokenId ? [tokenId] : undefined,
+    query: {
+      enabled: !!tokenId && tokenId > 0n,
+    },
+  })
+}
+
+/**
+ * Get all property IDs owned by a host
+ */
+export function usePropertiesByHost(hostAddress: Address | undefined) {
+  return useReadContract({
+    ...CONTRACTS.propertyNFT,
+    functionName: 'getPropertiesByHost',
+    args: hostAddress ? [hostAddress] : undefined,
+    query: {
+      enabled: !!hostAddress,
+    },
+  })
+}
+
+/**
+ * Hook to fetch all properties with their full details for a host
+ */
+export function useHostProperties(hostAddress: Address | undefined) {
+  const { data: propertyIds, isLoading: isLoadingIds, refetch } = usePropertiesByHost(hostAddress)
+
+  return {
+    propertyIds: propertyIds as bigint[] | undefined,
+    isLoading: isLoadingIds,
+    refetch,
+  }
+}
+
+/**
+ * Hook to manage property active status
+ */
+export function useSetPropertyActive() {
+  const {
+    writeContract,
+    data: txHash,
+    isPending,
+    error,
+  } = useWriteContract()
+
+  const {
+    isLoading: isTxLoading,
+    isSuccess: isTxSuccess,
+  } = useWaitForTransactionReceipt({
+    hash: txHash,
+  })
+
+  const setPropertyActive = React.useCallback(
+    (propertyId: bigint, active: boolean) => {
+      writeContract({
+        ...CONTRACTS.propertyNFT,
+        functionName: 'setPropertyActive',
+        args: [propertyId, active],
+      })
+    },
+    [writeContract]
+  )
+
+  return {
+    setPropertyActive,
+    isPending: isPending || isTxLoading,
+    isSuccess: isTxSuccess,
+    error,
+  }
+}
+
+/**
+ * Hook to update property metadata
+ */
+export function useUpdateProperty() {
+  const {
+    writeContract,
+    data: txHash,
+    isPending,
+    error,
+  } = useWriteContract()
+
+  const {
+    isLoading: isTxLoading,
+    isSuccess: isTxSuccess,
+  } = useWaitForTransactionReceipt({
+    hash: txHash,
+  })
+
+  const updateProperty = React.useCallback(
+    (propertyId: bigint, newIpfsHash: string) => {
+      writeContract({
+        ...CONTRACTS.propertyNFT,
+        functionName: 'updateProperty',
+        args: [propertyId, newIpfsHash],
+      })
+    },
+    [writeContract]
+  )
+
+  return {
+    updateProperty,
+    isPending: isPending || isTxLoading,
+    isSuccess: isTxSuccess,
+    error,
+  }
+}

@@ -1,0 +1,1217 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_travelerSBT",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_hostSBT",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_propertyNFT",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_propertyRegistry",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "inputs": [],
+    "name": "AlreadyFlagged",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "AlreadyVoted",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NotAuthorized",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NotFlagged",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NotModerator",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "owner",
+        "type": "address"
+      }
+    ],
+    "name": "OwnableInvalidOwner",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "OwnableUnauthorizedAccount",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "moderator",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "status",
+        "type": "bool"
+      }
+    ],
+    "name": "ModeratorSet",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "previousOwner",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newOwner",
+        "type": "address"
+      }
+    ],
+    "name": "OwnershipTransferred",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "reviewId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "reason",
+        "type": "string"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "flaggedBy",
+        "type": "address"
+      }
+    ],
+    "name": "ReviewFlagged",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "reviewId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "propertyId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "reviewer",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "reviewee",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "rating",
+        "type": "uint8"
+      }
+    ],
+    "name": "ReviewPublished",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "reviewId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "unflaggedBy",
+        "type": "address"
+      }
+    ],
+    "name": "ReviewUnflagged",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "reviewId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "voter",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "helpful",
+        "type": "bool"
+      }
+    ],
+    "name": "ReviewVoted",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256[]",
+        "name": "reviewIds",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "string",
+        "name": "reason",
+        "type": "string"
+      }
+    ],
+    "name": "batchFlag",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "reviewId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "reason",
+        "type": "string"
+      }
+    ],
+    "name": "flagReview",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "offset",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "limit",
+        "type": "uint256"
+      }
+    ],
+    "name": "getFlaggedReviews",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "reviewId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "escrowId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "reviewer",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "reviewee",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "propertyId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "rating",
+            "type": "uint8"
+          },
+          {
+            "internalType": "string",
+            "name": "ipfsCommentHash",
+            "type": "string"
+          },
+          {
+            "internalType": "uint256",
+            "name": "timestamp",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "travelerToHost",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "flagged",
+            "type": "bool"
+          },
+          {
+            "internalType": "string",
+            "name": "flagReason",
+            "type": "string"
+          },
+          {
+            "internalType": "uint256",
+            "name": "flaggedAt",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "flaggedBy",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "helpfulCount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "unhelpfulCount",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct ReviewRegistry.Review[]",
+        "name": "",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "propertyId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getPropertyReviews",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "reviewId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "escrowId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "reviewer",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "reviewee",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "propertyId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "rating",
+            "type": "uint8"
+          },
+          {
+            "internalType": "string",
+            "name": "ipfsCommentHash",
+            "type": "string"
+          },
+          {
+            "internalType": "uint256",
+            "name": "timestamp",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "travelerToHost",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "flagged",
+            "type": "bool"
+          },
+          {
+            "internalType": "string",
+            "name": "flagReason",
+            "type": "string"
+          },
+          {
+            "internalType": "uint256",
+            "name": "flaggedAt",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "flaggedBy",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "helpfulCount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "unhelpfulCount",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct ReviewRegistry.Review[]",
+        "name": "",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "propertyId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getPropertyStats",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "totalReviewsCount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "visibleReviewsCount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "averageRating",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "reviewId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getReview",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "reviewId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "escrowId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "reviewer",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "reviewee",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "propertyId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "rating",
+            "type": "uint8"
+          },
+          {
+            "internalType": "string",
+            "name": "ipfsCommentHash",
+            "type": "string"
+          },
+          {
+            "internalType": "uint256",
+            "name": "timestamp",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "travelerToHost",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "flagged",
+            "type": "bool"
+          },
+          {
+            "internalType": "string",
+            "name": "flagReason",
+            "type": "string"
+          },
+          {
+            "internalType": "uint256",
+            "name": "flaggedAt",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "flaggedBy",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "helpfulCount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "unhelpfulCount",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct ReviewRegistry.Review",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      }
+    ],
+    "name": "getUserReviews",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "reviewId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "escrowId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "reviewer",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "reviewee",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "propertyId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "rating",
+            "type": "uint8"
+          },
+          {
+            "internalType": "string",
+            "name": "ipfsCommentHash",
+            "type": "string"
+          },
+          {
+            "internalType": "uint256",
+            "name": "timestamp",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "travelerToHost",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "flagged",
+            "type": "bool"
+          },
+          {
+            "internalType": "string",
+            "name": "flagReason",
+            "type": "string"
+          },
+          {
+            "internalType": "uint256",
+            "name": "flaggedAt",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "flaggedBy",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "helpfulCount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "unhelpfulCount",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct ReviewRegistry.Review[]",
+        "name": "",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "propertyId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getVisiblePropertyReviews",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "reviewId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "escrowId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "reviewer",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "reviewee",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "propertyId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "rating",
+            "type": "uint8"
+          },
+          {
+            "internalType": "string",
+            "name": "ipfsCommentHash",
+            "type": "string"
+          },
+          {
+            "internalType": "uint256",
+            "name": "timestamp",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "travelerToHost",
+            "type": "bool"
+          },
+          {
+            "internalType": "bool",
+            "name": "flagged",
+            "type": "bool"
+          },
+          {
+            "internalType": "string",
+            "name": "flagReason",
+            "type": "string"
+          },
+          {
+            "internalType": "uint256",
+            "name": "flaggedAt",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "flaggedBy",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "helpfulCount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "unhelpfulCount",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct ReviewRegistry.Review[]",
+        "name": "",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "hasVoted",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "hostSBT",
+    "outputs": [
+      {
+        "internalType": "contract IHostSBT",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "isModerator",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "moderators",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "propertyNFT",
+    "outputs": [
+      {
+        "internalType": "contract IPropertyNFT",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "propertyRegistry",
+    "outputs": [
+      {
+        "internalType": "contract IPropertyRegistry",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "propertyReviews",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "reviewId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "escrowId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "reviewer",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "reviewee",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "propertyId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint8",
+        "name": "rating",
+        "type": "uint8"
+      },
+      {
+        "internalType": "string",
+        "name": "ipfsCommentHash",
+        "type": "string"
+      },
+      {
+        "internalType": "bool",
+        "name": "travelerToHost",
+        "type": "bool"
+      }
+    ],
+    "name": "publishReview",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "renounceOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "reviewValidator",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "reviews",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "reviewId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "escrowId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "reviewer",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "reviewee",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "propertyId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint8",
+        "name": "rating",
+        "type": "uint8"
+      },
+      {
+        "internalType": "string",
+        "name": "ipfsCommentHash",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "travelerToHost",
+        "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "flagged",
+        "type": "bool"
+      },
+      {
+        "internalType": "string",
+        "name": "flagReason",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "flaggedAt",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "flaggedBy",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "helpfulCount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "unhelpfulCount",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_travelerSBT",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_hostSBT",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_propertyNFT",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_propertyRegistry",
+        "type": "address"
+      }
+    ],
+    "name": "setContracts",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "moderator",
+        "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "status",
+        "type": "bool"
+      }
+    ],
+    "name": "setModerator",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_reviewValidator",
+        "type": "address"
+      }
+    ],
+    "name": "setReviewValidator",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalReviews",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newOwner",
+        "type": "address"
+      }
+    ],
+    "name": "transferOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "travelerSBT",
+    "outputs": [
+      {
+        "internalType": "contract ITravelerSBT",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "reviewId",
+        "type": "uint256"
+      }
+    ],
+    "name": "unflagReview",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "userReviews",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "reviewId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "helpful",
+        "type": "bool"
+      }
+    ],
+    "name": "voteOnReview",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]
