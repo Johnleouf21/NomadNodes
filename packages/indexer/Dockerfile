@@ -1,8 +1,8 @@
 # Dockerfile for Ponder indexer on Railway
-FROM node:20-slim
+FROM node:24-slim
 
-# Install pnpm
-RUN npm install -g pnpm@9
+# Install pnpm (match version in root package.json)
+RUN npm install -g pnpm@10.23.0
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml* ./
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile --prod=false
+RUN pnpm install --frozen-lockfile
 
 # Copy application files
 COPY . .
