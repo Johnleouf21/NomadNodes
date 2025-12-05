@@ -1,5 +1,4 @@
 import { createConfig } from "ponder";
-import { http, fallback, defineChain } from "viem";
 
 import {
   PropertyRegistryAbi,
@@ -38,60 +37,28 @@ if (!alchemyUrl && !infuraUrl) {
   );
 }
 
-// Use primary RPC (Alchemy preferred, Infura as backup)
-// Note: We prioritize Alchemy but create fallback array for manual switching if needed
-const primaryRpcUrl = alchemyUrl || infuraUrl;
-console.log(
-  `✅ Using ${alchemyUrl ? "Alchemy" : "Infura"} RPC for Sepolia: ${primaryRpcUrl?.substring(0, 50)}...`
-);
-
-// Build transport array for fallback
-const sepoliaTransports: ReturnType<typeof http>[] = [];
+// Build RPC array with fallback support (Ponder handles failover automatically)
+const sepoliaRpcs: string[] = [];
 if (alchemyUrl) {
-  sepoliaTransports.push(http(alchemyUrl, { retryCount: 3, retryDelay: 2000 }));
+  console.log(`✅ Adding Alchemy RPC: ${alchemyUrl.substring(0, 50)}...`);
+  sepoliaRpcs.push(alchemyUrl);
 }
 if (infuraUrl) {
-  sepoliaTransports.push(http(infuraUrl, { retryCount: 3, retryDelay: 2000 }));
+  console.log(`✅ Adding Infura RPC: ${infuraUrl.substring(0, 50)}...`);
+  sepoliaRpcs.push(infuraUrl);
 }
 
-// CRITICAL: Use fallback() to handle both RPCs with automatic failover
-const sepoliaTransport =
-  sepoliaTransports.length > 1
-    ? fallback(sepoliaTransports, { rank: false, retryCount: 3 })
-    : sepoliaTransports[0];
-
-// Create a custom Sepolia chain definition WITHOUT default public RPCs
-// This prevents Viem from using thirdweb.com or other public RPCs
-// CRITICAL: We must define the chain with empty rpcUrls AND proper network details
-const customSepolia = defineChain({
-  id: 11155111,
-  name: "Sepolia",
-  nativeCurrency: { name: "Sepolia Ether", symbol: "ETH", decimals: 18 },
-  rpcUrls: {
-    // Empty default means Viem MUST use our transport
-    default: {
-      http: [],
-      webSocket: [],
-    },
-  },
-  blockExplorers: {
-    default: { name: "Etherscan", url: "https://sepolia.etherscan.io" },
-  },
-  contracts: {},
-  testnet: true,
-});
-
-// Define chain configurations
+// Define chain configurations using Ponder's native API
 const chainConfigs = {
   sepolia: {
-    chain: customSepolia, // Use custom chain with NO default RPCs
-    transport: sepoliaTransport,
+    id: 11155111,
+    rpc: sepoliaRpcs, // Ponder will use these RPCs with automatic fallback
     pollingInterval: 5000, // 5 seconds to reduce RPC load
     maxRequestsPerSecond: 50, // Alchemy/Infura rate limit
   },
   localhost: {
     id: 31337,
-    transport: http(process.env.PONDER_RPC_URL_31337 ?? "http://127.0.0.1:8545"),
+    rpc: process.env.PONDER_RPC_URL_31337 ?? "http://127.0.0.1:8545",
     pollingInterval: 1000, // Poll every 1 second for local dev
   },
 } as const;
