@@ -1,5 +1,6 @@
 import { createConfig } from "ponder";
 import { http, fallback } from "viem";
+import { sepolia } from "viem/chains";
 
 import {
   PropertyRegistryAbi,
@@ -55,10 +56,15 @@ const sepoliaTransport =
     ? fallback(sepoliaTransports, { retryCount: 2 })
     : sepoliaTransports[0];
 
-// Define chain configurations
+// Define chain configurations with explicit chain objects
 const chainConfigs = {
   sepolia: {
-    id: 11155111,
+    chain: {
+      ...sepolia,
+      rpcUrls: {
+        default: { http: [] }, // Disable default RPCs
+      },
+    },
     transport: sepoliaTransport,
     pollingInterval: 5000, // 5 seconds to reduce RPC load
   },
