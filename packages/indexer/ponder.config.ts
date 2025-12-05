@@ -1,5 +1,5 @@
 import { createConfig } from "ponder";
-import { http, fallback } from "viem";
+import { http, fallback, defineChain } from "viem";
 
 import {
   PropertyRegistryAbi,
@@ -60,11 +60,25 @@ const sepoliaTransport =
     ? fallback(sepoliaTransports, { rank: false, retryCount: 3 })
     : sepoliaTransports[0];
 
+// Create a custom Sepolia chain definition WITHOUT default public RPCs
+// This prevents Viem from using thirdweb.com or other public RPCs
+const customSepolia = defineChain({
+  id: 11155111,
+  name: "Sepolia",
+  nativeCurrency: { name: "Sepolia Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: {
+    default: { http: [] }, // NO default RPCs - force use of our transport
+  },
+  blockExplorers: {
+    default: { name: "Etherscan", url: "https://sepolia.etherscan.io" },
+  },
+  testnet: true,
+});
+
 // Define chain configurations
-// IMPORTANT: Ponder expects either id OR a recognized network name, NOT a viem chain object
 const chainConfigs = {
   sepolia: {
-    id: 11155111, // Sepolia chain ID
+    chain: customSepolia, // Use custom chain with NO default RPCs
     transport: sepoliaTransport,
     pollingInterval: 5000, // 5 seconds to reduce RPC load
     maxRequestsPerSecond: 50, // Alchemy/Infura rate limit
