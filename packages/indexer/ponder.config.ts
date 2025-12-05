@@ -53,8 +53,8 @@ const chainConfigs = {
   sepolia: {
     id: 11155111,
     rpc: sepoliaRpcs, // Ponder will use these RPCs with automatic fallback
-    pollingInterval: 5000, // 5 seconds to reduce RPC load
-    maxRequestsPerSecond: 50, // Alchemy/Infura rate limit
+    pollingInterval: 12000, // 12 seconds - much slower to avoid rate limits
+    maxRequestsPerSecond: 10, // Reduced to avoid rate limits on free tier
   },
   localhost: {
     id: 31337,
