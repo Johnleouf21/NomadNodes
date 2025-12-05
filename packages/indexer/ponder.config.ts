@@ -1,6 +1,5 @@
 import { createConfig } from "ponder";
 import { http, fallback } from "viem";
-import { sepolia } from "viem/chains";
 
 import {
   PropertyRegistryAbi,
@@ -56,20 +55,19 @@ const sepoliaTransport =
     ? fallback(sepoliaTransports, { retryCount: 2 })
     : sepoliaTransports[0];
 
-// Define chain configurations with explicit chain objects
+// Define chain configurations - use explicit network with custom transport
 const chainConfigs = {
   sepolia: {
-    chain: {
-      ...sepolia,
-      rpcUrls: {
-        default: { http: [] }, // Disable default RPCs
-      },
-    },
+    network: "sepolia",
     transport: sepoliaTransport,
     pollingInterval: 5000, // 5 seconds to reduce RPC load
+    maxRequestsPerSecond: 50, // Alchemy/Infura rate limit
   },
   localhost: {
-    id: 31337,
+    network: {
+      name: "Localhost",
+      chainId: 31337,
+    },
     transport: http(process.env.PONDER_RPC_URL_31337 ?? "http://127.0.0.1:8545"),
     pollingInterval: 1000, // Poll every 1 second for local dev
   },
