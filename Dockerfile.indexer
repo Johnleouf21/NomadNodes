@@ -1,0 +1,36 @@
+# Multi-stage Dockerfile for Ponder indexer in monorepo
+# Optimized for Railway deployment
+
+FROM node:24-slim AS base
+
+# Install pnpm
+RUN npm install -g pnpm@10.23.0
+
+# Set working directory
+WORKDIR /app
+
+# Copy workspace configuration
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+
+# Copy indexer package.json
+COPY packages/indexer/package.json ./packages/indexer/
+
+# Install dependencies for entire workspace
+RUN pnpm install --frozen-lockfile
+
+# Copy indexer source code
+COPY packages/indexer ./packages/indexer
+
+# Generate Ponder types
+WORKDIR /app/packages/indexer
+RUN pnpm codegen
+
+# Expose port
+EXPOSE 42069
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:42069/health', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"
+
+# Start Ponder
+CMD ["pnpm", "start"]
