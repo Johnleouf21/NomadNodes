@@ -62,16 +62,22 @@ const sepoliaTransport =
 
 // Create a custom Sepolia chain definition WITHOUT default public RPCs
 // This prevents Viem from using thirdweb.com or other public RPCs
+// CRITICAL: We must define the chain with empty rpcUrls AND proper network details
 const customSepolia = defineChain({
   id: 11155111,
   name: "Sepolia",
   nativeCurrency: { name: "Sepolia Ether", symbol: "ETH", decimals: 18 },
   rpcUrls: {
-    default: { http: [] }, // NO default RPCs - force use of our transport
+    // Empty default means Viem MUST use our transport
+    default: {
+      http: [],
+      webSocket: [],
+    },
   },
   blockExplorers: {
     default: { name: "Etherscan", url: "https://sepolia.etherscan.io" },
   },
+  contracts: {},
   testnet: true,
 });
 
