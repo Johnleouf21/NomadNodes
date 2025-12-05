@@ -18,12 +18,21 @@ const chainName = (process.env.PONDER_CHAIN || "sepolia") as "localhost" | "sepo
 const alchemyUrl = process.env.PONDER_RPC_URL_11155111;
 const infuraUrl = process.env.PONDER_RPC_URL_INFURA;
 
+// Validate RPC configuration
+if (!alchemyUrl && !infuraUrl) {
+  throw new Error(
+    "❌ No RPC URL configured! Set PONDER_RPC_URL_11155111 or PONDER_RPC_URL_INFURA environment variable."
+  );
+}
+
 // Build transport array for fallback
 const sepoliaTransports: ReturnType<typeof http>[] = [];
 if (alchemyUrl) {
+  console.log("✅ Using Alchemy RPC for Sepolia");
   sepoliaTransports.push(http(alchemyUrl, { retryCount: 3, retryDelay: 2000 }));
 }
 if (infuraUrl) {
+  console.log("✅ Using Infura RPC for Sepolia");
   sepoliaTransports.push(http(infuraUrl, { retryCount: 3, retryDelay: 2000 }));
 }
 
@@ -31,7 +40,7 @@ if (infuraUrl) {
 const sepoliaTransport =
   sepoliaTransports.length > 1
     ? fallback(sepoliaTransports, { retryCount: 2 })
-    : http(alchemyUrl || infuraUrl);
+    : sepoliaTransports[0];
 
 // Define chain configurations
 const chainConfigs = {
