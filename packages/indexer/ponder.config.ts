@@ -17,11 +17,6 @@ const chainName = (process.env.PONDER_CHAIN || "sepolia") as "localhost" | "sepo
 // RPC URLs with fallback for rate limit resilience
 const alchemyUrl = process.env.PONDER_RPC_URL_11155111;
 const infuraUrl = process.env.PONDER_RPC_URL_INFURA;
-const publicRpcs = [
-  "https://ethereum-sepolia-rpc.publicnode.com",
-  "https://rpc.sepolia.org",
-  "https://sepolia.gateway.tenderly.co",
-];
 
 // Build transport array for fallback
 const sepoliaTransports: ReturnType<typeof http>[] = [];
@@ -31,14 +26,12 @@ if (alchemyUrl) {
 if (infuraUrl) {
   sepoliaTransports.push(http(infuraUrl, { retryCount: 3, retryDelay: 2000 }));
 }
-// Add public RPCs as fallbacks
-publicRpcs.forEach((url) => sepoliaTransports.push(http(url, { retryCount: 2, retryDelay: 1000 })));
 
 // Create fallback transport with automatic failover
 const sepoliaTransport =
   sepoliaTransports.length > 1
     ? fallback(sepoliaTransports, { retryCount: 2 })
-    : http(alchemyUrl || publicRpcs[0]);
+    : http(alchemyUrl || infuraUrl);
 
 // Define chain configurations
 const chainConfigs = {
