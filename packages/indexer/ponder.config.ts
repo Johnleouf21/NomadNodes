@@ -1,6 +1,5 @@
 import { createConfig } from "ponder";
 import { http, fallback } from "viem";
-import { sepolia as sepoliaChain } from "viem/chains";
 
 import {
   PropertyRegistryAbi,
@@ -61,11 +60,11 @@ const sepoliaTransport =
     ? fallback(sepoliaTransports, { rank: false, retryCount: 3 })
     : sepoliaTransports[0];
 
-// Define chain configurations using explicit chain definition
-// This prevents Viem from using default public RPCs
+// Define chain configurations
+// IMPORTANT: Ponder expects either id OR a recognized network name, NOT a viem chain object
 const chainConfigs = {
   sepolia: {
-    chain: sepoliaChain,
+    id: 11155111, // Sepolia chain ID
     transport: sepoliaTransport,
     pollingInterval: 5000, // 5 seconds to reduce RPC load
     maxRequestsPerSecond: 50, // Alchemy/Infura rate limit
