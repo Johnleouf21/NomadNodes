@@ -1,5 +1,6 @@
 import { createConfig } from "ponder";
 import { http, fallback } from "viem";
+import { sepolia as sepoliaChain } from "viem/chains";
 
 import {
   PropertyRegistryAbi,
@@ -38,36 +39,39 @@ if (!alchemyUrl && !infuraUrl) {
   );
 }
 
+// Use primary RPC (Alchemy preferred, Infura as backup)
+// Note: We prioritize Alchemy but create fallback array for manual switching if needed
+const primaryRpcUrl = alchemyUrl || infuraUrl;
+console.log(
+  `✅ Using ${alchemyUrl ? "Alchemy" : "Infura"} RPC for Sepolia: ${primaryRpcUrl?.substring(0, 50)}...`
+);
+
 // Build transport array for fallback
 const sepoliaTransports: ReturnType<typeof http>[] = [];
 if (alchemyUrl) {
-  console.log("✅ Using Alchemy RPC for Sepolia");
   sepoliaTransports.push(http(alchemyUrl, { retryCount: 3, retryDelay: 2000 }));
 }
 if (infuraUrl) {
-  console.log("✅ Using Infura RPC for Sepolia");
   sepoliaTransports.push(http(infuraUrl, { retryCount: 3, retryDelay: 2000 }));
 }
 
-// Create fallback transport with automatic failover
+// CRITICAL: Use fallback() to handle both RPCs with automatic failover
 const sepoliaTransport =
   sepoliaTransports.length > 1
-    ? fallback(sepoliaTransports, { retryCount: 2 })
+    ? fallback(sepoliaTransports, { rank: false, retryCount: 3 })
     : sepoliaTransports[0];
 
-// Define chain configurations - use explicit network with custom transport
+// Define chain configurations using explicit chain definition
+// This prevents Viem from using default public RPCs
 const chainConfigs = {
   sepolia: {
-    network: "sepolia",
+    chain: sepoliaChain,
     transport: sepoliaTransport,
     pollingInterval: 5000, // 5 seconds to reduce RPC load
     maxRequestsPerSecond: 50, // Alchemy/Infura rate limit
   },
   localhost: {
-    network: {
-      name: "Localhost",
-      chainId: 31337,
-    },
+    id: 31337,
     transport: http(process.env.PONDER_RPC_URL_31337 ?? "http://127.0.0.1:8545"),
     pollingInterval: 1000, // Poll every 1 second for local dev
   },
