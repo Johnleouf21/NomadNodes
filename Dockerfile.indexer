@@ -3,6 +3,9 @@
 
 FROM node:24-slim AS base
 
+# Cache buster to force fresh build - increment this to rebuild
+ENV CACHE_BUST=2025-12-05-v7-FINAL-FIX
+
 # Install pnpm
 RUN npm install -g pnpm@10.23.0
 
