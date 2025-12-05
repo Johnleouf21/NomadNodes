@@ -14,6 +14,19 @@ import {
 // Default to sepolia for production, localhost for development
 const chainName = (process.env.PONDER_CHAIN || "sepolia") as "localhost" | "sepolia";
 
+// Debug: Log all env vars to verify they're loaded
+console.log("🔍 DEBUG - Environment variables:");
+console.log("  PONDER_CHAIN:", process.env.PONDER_CHAIN);
+console.log(
+  "  PONDER_RPC_URL_11155111:",
+  process.env.PONDER_RPC_URL_11155111 ? "SET ✅" : "NOT SET ❌"
+);
+console.log(
+  "  PONDER_RPC_URL_INFURA:",
+  process.env.PONDER_RPC_URL_INFURA ? "SET ✅" : "NOT SET ❌"
+);
+console.log("  DATABASE_SCHEMA:", process.env.DATABASE_SCHEMA);
+
 // RPC URLs with fallback for rate limit resilience
 const alchemyUrl = process.env.PONDER_RPC_URL_11155111;
 const infuraUrl = process.env.PONDER_RPC_URL_INFURA;
