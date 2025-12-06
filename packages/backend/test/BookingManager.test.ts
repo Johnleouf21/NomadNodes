@@ -160,15 +160,14 @@ describe("BookingManager", function () {
     });
 
     it("should revert if no units available", async function () {
-      // NOTE: Due to totalSupply decode bug in AvailabilityManager, only 2 units are detected instead of 5
-      // Book all available units (2 instead of 5)
-      for (let i = 0; i < 2; i++) {
+      // Book all 5 available units
+      for (let i = 0; i < 5; i++) {
         await bookingManager
           .connect(traveler)
           .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress);
       }
 
-      // 3rd booking should fail (no more units available)
+      // 6th booking should fail (no more units available)
       await expect(
         bookingManager.connect(traveler).bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress)
       ).to.be.revertedWithCustomError(bookingManager, "NoAvailableUnits");
