@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./interfaces/IRoomTypeNFT.sol";
+import "./libraries/PropertyTypes.sol";
 
 /**
  * @title AvailabilityManager
@@ -84,14 +85,9 @@ contract AvailabilityManager is Ownable {
 
         if (startDate >= endDate) revert InvalidDateRange();
 
-        // Get total supply from RoomTypeNFT
-        (success, data) = address(roomTypeNFT).staticcall(abi.encodeWithSignature("getRoomType(uint256)", tokenId));
-        require(success, "Failed to get room type");
-
-        uint256 totalSupply;
-        assembly {
-            totalSupply := mload(add(data, 256))
-        }
+        // Get total supply from RoomTypeNFT using the interface
+        PropertyTypes.RoomType memory roomType = roomTypeNFT.getRoomType(tokenId);
+        uint256 totalSupply = roomType.totalSupply;
 
         require(numUnitsAvailable <= totalSupply, "Exceeds total supply");
 
@@ -197,18 +193,9 @@ contract AvailabilityManager is Ownable {
     function getAvailableUnits(uint256 tokenId, uint256 startDate, uint256 endDate) external view returns (uint256) {
         if (startDate >= endDate) return 0;
 
-        // Get total supply from RoomTypeNFT
-        (bool success, bytes memory data) = address(roomTypeNFT).staticcall(
-            abi.encodeWithSignature("getRoomType(uint256)", tokenId)
-        );
-        if (!success) return 0;
-
-        // Decode RoomType struct - totalSupply is at position 7
-        uint256 totalSupply;
-        assembly {
-            // Skip 32 bytes (length) + 7*32 bytes (first 7 fields) = 256 bytes
-            totalSupply := mload(add(data, 256))
-        }
+        // Get total supply from RoomTypeNFT using the interface
+        PropertyTypes.RoomType memory roomType = roomTypeNFT.getRoomType(tokenId);
+        uint256 totalSupply = roomType.totalSupply;
 
         uint256 availableCount = 0;
         for (uint256 i = 0; i < totalSupply; i++) {
@@ -242,17 +229,9 @@ contract AvailabilityManager is Ownable {
     function checkAvailability(uint256 tokenId, uint256 startDate, uint256 endDate) external view returns (bool) {
         if (startDate >= endDate) return false;
 
-        // Get total supply from RoomTypeNFT
-        (bool success, bytes memory data) = address(roomTypeNFT).staticcall(
-            abi.encodeWithSignature("getRoomType(uint256)", tokenId)
-        );
-        if (!success) return false;
-
-        // Decode totalSupply from RoomType struct
-        uint256 totalSupply;
-        assembly {
-            totalSupply := mload(add(data, 256))
-        }
+        // Get total supply from RoomTypeNFT using the interface
+        PropertyTypes.RoomType memory roomType = roomTypeNFT.getRoomType(tokenId);
+        uint256 totalSupply = roomType.totalSupply;
 
         // Normalize dates
         uint256 normalizedStart = (startDate / 1 days) * 1 days;

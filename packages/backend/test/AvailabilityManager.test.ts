@@ -271,15 +271,12 @@ describe("AvailabilityManager", function () {
           .setAvailability(tokenId, i, checkIn, checkOut, true);
       }
 
-      // NOTE: There's a bug in AvailabilityManager.getAvailableUnits() where it incorrectly
-      // decodes totalSupply from the RoomType struct (string fields offset the data).
-      // It reads maxGuests (2) instead of totalSupply (3). This should be fixed in the contract.
       const availableUnits = await availabilityManager.getAvailableUnits(
         tokenId,
         checkIn,
         checkOut
       );
-      expect(Number(availableUnits)).to.be.oneOf([2, 3]); // Should be 3, but contract bug returns 2
+      expect(Number(availableUnits)).to.equal(3); // All 3 units are available
     });
   });
 
@@ -384,21 +381,22 @@ describe("AvailabilityManager", function () {
       expect(await availabilityManager.getAvailableUnits(tokenId, checkOut, checkIn)).to.equal(0);
     });
 
-    it("should return 0 from getAvailableUnits with invalid token ID", async function () {
+    it("should revert from getAvailableUnits with invalid token ID", async function () {
       const invalidTokenId = 999999n;
-      expect(
-        await availabilityManager.getAvailableUnits(invalidTokenId, checkIn, checkOut)
-      ).to.equal(0);
+      await expect(
+        availabilityManager.getAvailableUnits(invalidTokenId, checkIn, checkOut)
+      ).to.be.revertedWithCustomError(roomTypeNFT, "RoomTypeNotFound");
     });
 
     it("should return false from checkAvailability with invalid date range", async function () {
       expect(await availabilityManager.checkAvailability(tokenId, checkOut, checkIn)).to.be.false;
     });
 
-    it("should return false from checkAvailability with invalid token ID", async function () {
+    it("should revert from checkAvailability with invalid token ID", async function () {
       const invalidTokenId = 999999n;
-      expect(await availabilityManager.checkAvailability(invalidTokenId, checkIn, checkOut)).to.be
-        .false;
+      await expect(
+        availabilityManager.checkAvailability(invalidTokenId, checkIn, checkOut)
+      ).to.be.revertedWithCustomError(roomTypeNFT, "RoomTypeNotFound");
     });
   });
 
@@ -430,14 +428,13 @@ describe("AvailabilityManager", function () {
     });
 
     it("should set all units as available when numUnits equals totalSupply", async function () {
-      // Note: Due to assembly offset issue in AvailabilityManager.setBulkAvailability (line 95),
-      // it reads maxGuests (2) instead of totalSupply (3) from the RoomType struct.
-      // This test works with the actual behavior (maxGuests=2).
-      await availabilityManager.connect(host).setBulkAvailability(tokenId, 2, startDate, endDate);
+      // totalSupply is 3, so we can set all 3 units as available
+      await availabilityManager.connect(host).setBulkAvailability(tokenId, 3, startDate, endDate);
 
-      // Units 0 and 1 should be available (based on maxGuests=2)
+      // All 3 units should be available
       expect(await availabilityManager.isRoomAvailable(tokenId, 0, startDate, endDate)).to.be.true;
       expect(await availabilityManager.isRoomAvailable(tokenId, 1, startDate, endDate)).to.be.true;
+      expect(await availabilityManager.isRoomAvailable(tokenId, 2, startDate, endDate)).to.be.true;
     });
 
     it("should set all units as unavailable when numUnits is 0", async function () {
@@ -471,9 +468,9 @@ describe("AvailabilityManager", function () {
     });
 
     it("should revert if numUnits exceeds total supply", async function () {
-      // Since the contract reads maxGuests (2) instead of totalSupply (3), exceeding 2 will revert
+      // totalSupply is 3, so requesting 4 units should revert
       await expect(
-        availabilityManager.connect(host).setBulkAvailability(tokenId, 3, startDate, endDate)
+        availabilityManager.connect(host).setBulkAvailability(tokenId, 4, startDate, endDate)
       ).to.be.revertedWith("Exceeds total supply");
     });
 
