@@ -11,7 +11,8 @@
         "artifacts/**",
         "cache/**",
         "typechain-types/**"
-      ]
+      ],
+      "env": ["NEXT_PUBLIC_*", "BACKEND_SIGNER_PRIVATE_KEY"]
     },
     "test": {
       "dependsOn": ["^build"],
