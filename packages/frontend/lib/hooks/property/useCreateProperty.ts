@@ -7,7 +7,7 @@
 import * as React from "react";
 import { useWriteContract, useWaitForTransactionReceipt, usePublicClient } from "wagmi";
 import { CONTRACTS } from "@/lib/contracts";
-import { decodeEventLog } from "viem";
+import { decodeEventLog, parseUnits } from "viem";
 import { uploadPropertyMetadataToIPFS, uploadRoomTypeMetadataToIPFS } from "@/lib/utils/ipfs";
 import type { PropertyMetadata, RoomTypeData } from "./types";
 
@@ -150,6 +150,10 @@ export function useCreateProperty({ onSuccess, onError }: UseCreatePropertyOptio
           .then((ipfsHash) => {
             // New RoomTypeNFT.addRoomType signature:
             // (propertyId, name, ipfsHash, pricePerNight, cleaningFee, maxGuests, maxSupply)
+            // Convert price to 6 decimals (USDC/EURC format)
+            const priceInUnits = parseUnits(room.pricePerNight.toString(), 6);
+            const cleaningFeeInUnits = parseUnits((room.cleaningFee || 0).toString(), 6);
+
             writeAddRoomType({
               ...CONTRACTS.roomTypeNFT,
               functionName: "addRoomType",
@@ -157,8 +161,8 @@ export function useCreateProperty({ onSuccess, onError }: UseCreatePropertyOptio
                 propertyId,
                 room.name,
                 ipfsHash,
-                BigInt(room.pricePerNight),
-                BigInt(room.cleaningFee || 0),
+                priceInUnits,
+                cleaningFeeInUnits,
                 BigInt(room.maxGuests),
                 BigInt(room.maxSupply),
               ],

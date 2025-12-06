@@ -259,7 +259,7 @@ export function PropertyCardPonderWithMetadata({
                 <div>
                   <span className="text-lg font-bold">
                     {currency === "EUR" ? "€" : "$"}
-                    {startingPrice}
+                    {startingPrice.toFixed(2)}
                   </span>
                   <span className="text-muted-foreground text-sm"> / night</span>
                 </div>

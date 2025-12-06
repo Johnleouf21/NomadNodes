@@ -7,7 +7,7 @@ import type { RoomTypeData } from "@/lib/hooks/property/types";
 export interface PonderRoomType {
   id: string;
   tokenId: bigint;
-  _propertyId: string;
+  propertyId: string;
   roomTypeId: bigint;
   name: string;
   ipfsHash: string;
@@ -67,15 +67,15 @@ async function fetchRoomTypesForProperties(
   }
 
   // Build GraphQL query to fetch room types for all properties
-  const _propertyIdList = _propertyIds.map((id) => `"${id}"`).join(", ");
+  const propertyIdList = _propertyIds.map((id) => `"${id}"`).join(", ");
 
   const graphqlQuery = `
     query {
-      roomTypes(where: { _propertyId_in: [${_propertyIdList}], isActive: true, isDeleted: false }, limit: 1000) {
+      roomTypes(where: { propertyId_in: [${propertyIdList}], isActive: true, isDeleted: false }, limit: 1000) {
         items {
           id
           tokenId
-          _propertyId
+          propertyId
           roomTypeId
           name
           ipfsHash
@@ -111,7 +111,7 @@ async function fetchRoomTypesForProperties(
   }
 
   // Convert string values to bigints
-  const rawItems = result._data?.roomTypes?.items || [];
+  const rawItems = result.data?.roomTypes?.items || [];
   const roomTypes: PonderRoomType[] = rawItems.map((item: any) => ({
     ...item,
     tokenId: BigInt(item.tokenId),
@@ -124,13 +124,13 @@ async function fetchRoomTypesForProperties(
     updatedAt: BigInt(item.updatedAt || 0),
   }));
 
-  // Group room types by _propertyId
+  // Group room types by propertyId
   const groupedRoomTypes = new Map<string, PonderRoomType[]>();
 
   for (const roomType of roomTypes) {
-    const existing = groupedRoomTypes.get(roomType._propertyId) || [];
+    const existing = groupedRoomTypes.get(roomType.propertyId) || [];
     existing.push(roomType);
-    groupedRoomTypes.set(roomType._propertyId, existing);
+    groupedRoomTypes.set(roomType.propertyId, existing);
   }
 
   return groupedRoomTypes;
@@ -138,7 +138,8 @@ async function fetchRoomTypesForProperties(
 
 /**
  * Fetch price info for multiple properties
- * Returns a map of _propertyId -> lowest price and currency
+ * Returns a map of propertyId -> lowest price and currency
+ * Uses IPFS metadata for accurate pricing (same source as property detail page)
  */
 export async function fetchPropertyPrices(
   _propertyIds: string[]
@@ -153,23 +154,26 @@ export async function fetchPropertyPrices(
     // Fetch room types for all properties
     const roomTypesMap = await fetchRoomTypesForProperties(_propertyIds);
 
-    // Calculate prices directly from schema (no need for IPFS fetch)
+    // Fetch IPFS metadata for each room type to get accurate prices
     for (const [_propertyId, roomTypes] of roomTypesMap) {
       if (roomTypes.length === 0) continue;
 
       const allPrices: number[] = [];
       let currency: "USD" | "EUR" = "USD";
 
-      // Use pricePerNight directly from schema (converted from bigint)
-      // Price is stored as USDC with 6 decimals
+      // Fetch metadata from IPFS for each room type (same as property detail page)
       for (const roomType of roomTypes) {
-        const priceInUsd = Number(roomType.pricePerNight) / 1e6;
-        if (priceInUsd > 0) {
-          allPrices.push(priceInUsd);
+        if (roomType.ipfsHash && roomType.ipfsHash !== "QmPlaceholder") {
+          const metadata = await fetchFromIPFS<RoomTypeData>(roomType.ipfsHash);
+          if (metadata?.pricePerNight && metadata.pricePerNight > 0) {
+            allPrices.push(metadata.pricePerNight);
+            // Use the currency from metadata
+            if (metadata.currency) {
+              currency = metadata.currency as "USD" | "EUR";
+            }
+          }
         }
       }
-      // Default to USD since prices are stored in USDC
-      currency = "USD";
 
       if (allPrices.length > 0) {
         priceMap.set(_propertyId, {

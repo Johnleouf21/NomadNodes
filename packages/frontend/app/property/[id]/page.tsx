@@ -680,7 +680,7 @@ function PonderRoomTypeCard({ roomType, propertyId, isAvailable = true }: Ponder
                 <div className="flex items-baseline gap-1">
                   <span className="text-2xl font-bold">
                     {currencySymbol}
-                    {pricePerNight}
+                    {pricePerNight.toFixed(2)}
                   </span>
                   <span className="text-muted-foreground text-sm">/ night</span>
                 </div>

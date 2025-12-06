@@ -8,7 +8,7 @@ import type { PropertyMetadata, RoomTypeData } from "@/lib/hooks/property/types"
 // IPFS gateways (order matters - dedicated gateway first for CORS support)
 const IPFS_GATEWAYS = [
   "https://green-yammering-puma-886.mypinata.cloud/ipfs/",
-  "https://cloudflare-ipfs.com/ipfs/",
+  "https://w3s.link/ipfs/",
   "https://dweb.link/ipfs/",
   "https://ipfs.io/ipfs/",
 ];
@@ -103,10 +103,11 @@ export async function fetchFromIPFS<T = any>(hashOrUrl: string): Promise<T | nul
           Accept: "application/json",
         },
         // Set a timeout
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(8000),
       });
 
       if (!response.ok) {
+        console.warn(`Gateway ${gateway} returned ${response.status} for ${hash}`);
         continue;
       }
 

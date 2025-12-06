@@ -71,6 +71,14 @@ function RoomTypePricingTab({ tokenId }: { tokenId: bigint }) {
 
   const roomName = roomMetadata?.name || data.name || `Room ${tokenId.toString()}`;
 
+  // Use IPFS metadata price as source of truth (converted to 6 decimals for display)
+  // This handles both old properties (price stored without decimals) and new ones
+  const priceFromMetadata = roomMetadata?.pricePerNight || 0;
+  const cleaningFeeFromMetadata = roomMetadata?.cleaningFee || 0;
+  // Convert to 6 decimal format for the editor component
+  const priceInUnits = BigInt(Math.round(priceFromMetadata * 1e6));
+  const cleaningFeeInUnits = BigInt(Math.round(cleaningFeeFromMetadata * 1e6));
+
   return (
     <div className="space-y-3">
       {/* Room Header */}
@@ -86,8 +94,8 @@ function RoomTypePricingTab({ tokenId }: { tokenId: bigint }) {
       {/* Pricing Editor */}
       <RoomPricingEditor
         tokenId={tokenId}
-        currentPricePerNight={BigInt(data.pricePerNight || 0n)}
-        currentCleaningFee={BigInt(data.cleaningFee || 0n)}
+        currentPricePerNight={priceInUnits}
+        currentCleaningFee={cleaningFeeInUnits}
         currency={roomMetadata?.currency || "USD"}
         _onUpdate={() => refetch()}
       />

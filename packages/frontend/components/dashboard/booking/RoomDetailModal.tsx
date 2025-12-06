@@ -189,7 +189,7 @@ export function RoomDetailModal({
               </div>
               <div className="bg-muted/50 rounded-lg p-3 text-center">
                 <DollarSign className="text-muted-foreground mx-auto mb-1 h-5 w-5" />
-                <p className="font-semibold">${pricePerNight}</p>
+                <p className="font-semibold">${pricePerNight.toFixed(2)}</p>
                 <p className="text-muted-foreground text-xs">Per Night</p>
               </div>
               <div className="bg-muted/50 rounded-lg p-3 text-center">

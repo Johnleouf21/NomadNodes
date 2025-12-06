@@ -89,7 +89,7 @@ function AvailableRoomCard({
               <span>•</span>
               <span className="text-foreground font-medium">
                 {currencySymbol}
-                {pricePerNight}/night
+                {pricePerNight.toFixed(2)}/night
               </span>
               <span>•</span>
               <span className="text-muted-foreground">
@@ -147,7 +147,7 @@ function AvailableRoomCard({
           <div className="mt-3 flex items-center justify-between border-t pt-3 text-sm">
             <span className="text-muted-foreground">
               {selectedQuantity} room{selectedQuantity > 1 ? "s" : ""} × {currencySymbol}
-              {pricePerNight}
+              {pricePerNight.toFixed(2)}
             </span>
             <span className="font-semibold">
               {currencySymbol}

@@ -214,7 +214,7 @@ export default function BookingPage() {
         {pricePerNight > 0 && (
           <p className="mt-2 text-lg font-semibold">
             {currency === "EUR" ? "€" : "$"}
-            {pricePerNight}{" "}
+            {pricePerNight.toFixed(2)}{" "}
             <span className="text-muted-foreground text-sm font-normal">per night</span>
           </p>
         )}

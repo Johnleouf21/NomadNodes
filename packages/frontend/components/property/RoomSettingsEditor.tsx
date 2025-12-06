@@ -132,7 +132,7 @@ export function RoomPricingEditor({
               </div>
               <p className="text-2xl font-bold">
                 {currencySymbol}
-                {formatUnits(currentPricePerNight, 6)}
+                {parseFloat(formatUnits(currentPricePerNight, 6)).toFixed(2)}
                 <span className="text-muted-foreground ml-1 text-sm font-normal">
                   {currencyLabel}
                 </span>
@@ -150,7 +150,7 @@ export function RoomPricingEditor({
                 ) : (
                   <>
                     {currencySymbol}
-                    {formatUnits(currentCleaningFee, 6)}
+                    {parseFloat(formatUnits(currentCleaningFee, 6)).toFixed(2)}
                     <span className="text-muted-foreground ml-1 text-sm font-normal">
                       {currencyLabel}
                     </span>
