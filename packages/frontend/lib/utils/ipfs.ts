@@ -5,9 +5,9 @@
 
 import type { PropertyMetadata, RoomTypeData } from "@/lib/hooks/property/types";
 
-// Public IPFS gateways (order matters - fastest first)
+// IPFS gateways (order matters - dedicated gateway first for CORS support)
 const IPFS_GATEWAYS = [
-  "https://gateway.pinata.cloud/ipfs/",
+  "https://green-yammering-puma-886.mypinata.cloud/ipfs/",
   "https://cloudflare-ipfs.com/ipfs/",
   "https://dweb.link/ipfs/",
   "https://ipfs.io/ipfs/",
