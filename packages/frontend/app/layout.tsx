@@ -49,7 +49,9 @@ export const metadata: Metadata = {
   authors: [{ name: "NomadNodes" }],
   creator: "NomadNodes",
   publisher: "NomadNodes",
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://nomadnodes.com"),
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL || "https://nomad-nodes-frontend.vercel.app"
+  ),
 
   // Open Graph
   openGraph: {
