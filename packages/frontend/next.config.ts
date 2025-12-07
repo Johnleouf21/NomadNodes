@@ -18,12 +18,25 @@ const nextConfig: NextConfig = {
     ],
   },
   transpilePackages: ["@nomad-nodes/indexer"],
-  // Turbopack configuration
+  // Webpack configuration (for production builds)
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        "pino-pretty": false,
+        "@react-native-async-storage/async-storage": false,
+        tap: false,
+      };
+    }
+    return config;
+  },
+  // Turbopack configuration (for dev mode)
   turbopack: {
     resolveAlias: {
       // Alias problematic optional dependencies to empty module
       "pino-pretty": "./lib/noop.js",
       "@react-native-async-storage/async-storage": "./lib/noop.js",
+      tap: "./lib/noop.js",
     },
   },
 };
