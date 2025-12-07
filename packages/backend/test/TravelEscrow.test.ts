@@ -355,10 +355,13 @@ describe("TravelEscrow", function () {
     });
   });
 
-  describe("Timeline: CheckIn-Based Payment", function () {
-    it("should allow confirmStay 24h after checkIn", async function () {
-      // Fast forward to checkIn + 24h
-      await time.increaseTo(checkIn + 86400);
+  describe("Timeline: Day-Based Payment", function () {
+    // New logic: Traveler can confirm on check-in day (00:00 - 23:59 UTC)
+    // Host can release after 23:59 UTC of check-in day
+
+    it("should allow confirmStay on check-in day", async function () {
+      // Fast forward to middle of check-in day (checkIn + 12 hours)
+      await time.increaseTo(checkIn + 43200);
 
       const tx = await travelEscrow.connect(traveler).confirmStay();
       const receipt = await tx.wait();
@@ -372,9 +375,9 @@ describe("TravelEscrow", function () {
       expect(details._status).to.equal(1); // Completed
     });
 
-    it("should revert confirmStay before 24h grace period", async function () {
-      // Just after checkIn (less than 24h)
-      await time.increaseTo(checkIn + 100);
+    it("should revert confirmStay before check-in day starts", async function () {
+      // Before check-in day (1 hour before)
+      await time.increaseTo(checkIn - 3600);
 
       await expect(travelEscrow.connect(traveler).confirmStay()).to.be.revertedWithCustomError(
         travelEscrow,
@@ -382,9 +385,19 @@ describe("TravelEscrow", function () {
       );
     });
 
+    it("should revert confirmStay after check-in day ends", async function () {
+      // After check-in day (next day)
+      await time.increaseTo(checkIn + 86400);
+
+      await expect(travelEscrow.connect(traveler).confirmStay()).to.be.revertedWithCustomError(
+        travelEscrow,
+        "DisputeWindowExpired"
+      );
+    });
+
     it("should revert confirmStay if not in Pending status", async function () {
-      // Fast forward and auto-release (moves to Completed status)
-      await time.increaseTo(checkIn + 86400 * 2 + 1);
+      // Fast forward past check-in day and auto-release
+      await time.increaseTo(checkIn + 86400);
       await travelEscrow.autoReleaseToHost();
 
       // Try to confirmStay when status is Completed (not Pending)
@@ -394,9 +407,9 @@ describe("TravelEscrow", function () {
       );
     });
 
-    it("should auto-release 48h after checkIn", async function () {
-      // Fast forward to checkIn + 48h
-      await time.increaseTo(checkIn + 86400 * 2 + 1);
+    it("should auto-release after check-in day ends", async function () {
+      // Fast forward to after check-in day (00:01 next day)
+      await time.increaseTo(checkIn + 86400);
 
       const tx = await travelEscrow.autoReleaseToHost();
       const receipt = await tx.wait();
@@ -410,8 +423,8 @@ describe("TravelEscrow", function () {
       expect(details._status).to.equal(1); // Completed
     });
 
-    it("should revert auto-release before 48h", async function () {
-      // Just after checkIn (less than 48h)
+    it("should revert auto-release during check-in day", async function () {
+      // During check-in day
       await time.increaseTo(checkIn + 100);
 
       await expect(travelEscrow.autoReleaseToHost()).to.be.revertedWithCustomError(
@@ -421,24 +434,33 @@ describe("TravelEscrow", function () {
     });
 
     it("should check if can auto-release", async function () {
+      // During check-in day - should be false
+      await time.increaseTo(checkIn + 43200);
       expect(await travelEscrow.canAutoRelease()).to.be.false;
 
-      await time.increaseTo(checkIn + 86400 * 2 + 1);
+      // After check-in day ends - should be true
+      await time.increaseTo(checkIn + 86400);
       expect(await travelEscrow.canAutoRelease()).to.be.true;
     });
 
     it("should check if traveler can confirm stay", async function () {
+      // Before check-in day - should be false
       expect(await travelEscrow.canConfirmStay()).to.be.false;
 
-      await time.increaseTo(checkIn + 86400);
+      // On check-in day - should be true
+      await time.increaseTo(checkIn + 100);
       expect(await travelEscrow.canConfirmStay()).to.be.true;
+
+      // After check-in day - should be false
+      await time.increaseTo(checkIn + 86400);
+      expect(await travelEscrow.canConfirmStay()).to.be.false;
     });
   });
 
   describe("Host Withdrawal", function () {
     beforeEach(async function () {
-      // Release funds (48h after checkIn)
-      await time.increaseTo(checkIn + 86400 * 2 + 1);
+      // Release funds (after check-in day ends)
+      await time.increaseTo(checkIn + 86400);
       await travelEscrow.autoReleaseToHost();
     });
 
