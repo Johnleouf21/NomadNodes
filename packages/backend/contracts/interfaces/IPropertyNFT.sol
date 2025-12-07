@@ -35,7 +35,8 @@ interface IPropertyNFT {
         uint256 checkInDate,
         uint256 checkOutDate,
         uint256 numGuests,
-        address escrowAddress
+        address escrowAddress,
+        address traveler
     ) external returns (uint256 bookingIndex);
 
     function setEscrowAddress(uint256 tokenId, uint256 bookingIndex, address escrowAddress) external;

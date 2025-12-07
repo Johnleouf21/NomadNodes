@@ -182,9 +182,16 @@ contract EscrowFactory is Ownable, Pausable {
         // Transfer payment
         IERC20(quote.currency).safeTransferFrom(msg.sender, address(this), quote.price);
 
-        // Create booking first
+        // Create booking first (pass msg.sender as traveler for Account Abstraction support)
         uint256 numGuests = quote.quantity > 0 ? quote.quantity : 2;
-        uint256 bookingIndex = nft.bookRoom(quote.tokenId, quote.checkIn, quote.checkOut, numGuests, address(0));
+        uint256 bookingIndex = nft.bookRoom(
+            quote.tokenId,
+            quote.checkIn,
+            quote.checkOut,
+            numGuests,
+            address(0),
+            msg.sender
+        );
 
         // Deploy escrow
         escrowAddress = escrowDeployer.deployEscrow(
@@ -290,9 +297,16 @@ contract EscrowFactory is Ownable, Pausable {
             if (roomFee < minFee) roomFee = minFee;
             if (roomFee >= room.price) revert InvalidFee();
 
-            // Create booking
+            // Create booking (pass msg.sender as traveler for Account Abstraction support)
             uint256 numGuests = room.quantity > 0 ? room.quantity : 2;
-            uint256 bookingIndex = nft.bookRoom(room.tokenId, quote.checkIn, quote.checkOut, numGuests, address(0));
+            uint256 bookingIndex = nft.bookRoom(
+                room.tokenId,
+                quote.checkIn,
+                quote.checkOut,
+                numGuests,
+                address(0),
+                msg.sender
+            );
 
             // Deploy escrow
             address escrowAddress = escrowDeployer.deployEscrow(

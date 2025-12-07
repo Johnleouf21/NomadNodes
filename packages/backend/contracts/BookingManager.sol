@@ -89,6 +89,7 @@ contract BookingManager is Ownable {
      * @param checkOutDate Unix timestamp for check-out
      * @param numGuests Number of guests
      * @param escrowAddress Address of the escrow contract (can be address(0) if not known yet)
+     * @param _traveler Address of the traveler (used when called via PropertyNFTAdapter for AA wallets)
      * @return bookingIndex Index of the created booking
      */
     function bookRoom(
@@ -96,14 +97,16 @@ contract BookingManager is Ownable {
         uint256 checkInDate,
         uint256 checkOutDate,
         uint256 numGuests,
-        address escrowAddress
+        address escrowAddress,
+        address _traveler
     ) external returns (uint256 bookingIndex) {
         address traveler = msg.sender;
 
-        // If called by PropertyNFTAdapter, the traveler is passed via tx.origin
-        // This is safe because only PropertyNFTAdapter is authorized
+        // If called by PropertyNFTAdapter, use the explicit traveler address
+        // This supports Account Abstraction wallets where tx.origin doesn't work
         if (msg.sender == propertyNFTAdapter) {
-            traveler = tx.origin;
+            if (_traveler == address(0)) revert InvalidAddress();
+            traveler = _traveler;
         }
 
         if (!travelerSBT.hasSBT(traveler)) revert MustHaveTravelerSBT();
@@ -162,9 +165,11 @@ contract BookingManager is Ownable {
      * @notice Confirm a booking (called by escrow after payment)
      * @param tokenId The room type token ID
      * @param bookingIndex Index of the booking
+     * @dev Allows both direct escrowFactory calls and calls via PropertyNFTAdapter
      */
     function confirmBooking(uint256 tokenId, uint256 bookingIndex) external {
-        if (msg.sender != escrowFactory) revert NotEscrowFactory();
+        // Allow both escrowFactory (direct) and propertyNFTAdapter (delegated)
+        if (msg.sender != escrowFactory && msg.sender != propertyNFTAdapter) revert NotEscrowFactory();
         if (bookingIndex >= bookings[tokenId].length) revert InvalidBookingIndex();
 
         PropertyTypes.Booking storage booking = bookings[tokenId][bookingIndex];
@@ -235,9 +240,12 @@ contract BookingManager is Ownable {
         address directCaller = msg.sender;
         address actualCaller = msg.sender;
 
+        // For cancellation via PropertyNFTAdapter, we use the stored traveler address
+        // instead of tx.origin to support Account Abstraction wallets
         if (msg.sender == propertyNFTAdapter) {
-            // Called through adapter by escrow contract - tx.origin is the traveler
-            actualCaller = tx.origin;
+            // The escrow contract or traveler's smart wallet is calling via adapter
+            // We'll check authorization against the booking's traveler below
+            actualCaller = booking.traveler;
         }
 
         // Only traveler, property owner, escrow contract (via adapter), or escrow factory can cancel
@@ -292,9 +300,11 @@ contract BookingManager is Ownable {
      * @param tokenId The room type token ID
      * @param bookingIndex Index of the booking
      * @param escrowAddress Address of the escrow contract
+     * @dev Allows both direct escrowFactory calls and calls via PropertyNFTAdapter
      */
     function setEscrowAddress(uint256 tokenId, uint256 bookingIndex, address escrowAddress) external {
-        if (msg.sender != escrowFactory) revert NotEscrowFactory();
+        // Allow both escrowFactory (direct) and propertyNFTAdapter (delegated)
+        if (msg.sender != escrowFactory && msg.sender != propertyNFTAdapter) revert NotEscrowFactory();
         if (bookingIndex >= bookings[tokenId].length) revert InvalidBookingIndex();
         if (escrowAddress == address(0)) revert InvalidAddress();
 

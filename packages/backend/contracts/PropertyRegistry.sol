@@ -39,6 +39,7 @@ contract PropertyRegistry is Ownable {
     event PropertyDeactivated(uint256 indexed propertyId);
     event PropertyOwnershipTransferred(uint256 indexed propertyId, address indexed oldOwner, address indexed newOwner);
     event PropertyRated(uint256 indexed propertyId, uint8 rating, uint256 newAverageRating);
+    event PropertyMetadataUpdated(uint256 indexed propertyId, string oldIpfsHash, string newIpfsHash);
 
     /*//////////////////////////////////////////////////////////////
                                 ERRORS
@@ -105,6 +106,20 @@ contract PropertyRegistry is Ownable {
         properties[propertyId].isActive = active;
         if (active) emit PropertyActivated(propertyId);
         else emit PropertyDeactivated(propertyId);
+    }
+
+    /**
+     * @notice Update property metadata IPFS hash
+     * @param propertyId The property ID
+     * @param newIpfsHash The new IPFS metadata hash
+     */
+    function updatePropertyMetadata(uint256 propertyId, string memory newIpfsHash) external {
+        if (propertyOwner[propertyId] != msg.sender) revert NotPropertyOwner();
+
+        string memory oldIpfsHash = properties[propertyId].ipfsMetadataHash;
+        properties[propertyId].ipfsMetadataHash = newIpfsHash;
+
+        emit PropertyMetadataUpdated(propertyId, oldIpfsHash, newIpfsHash);
     }
 
     function transferPropertyOwnership(uint256 propertyId, address newOwner) external {

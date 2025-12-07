@@ -160,7 +160,7 @@ describe("TravelEscrow", function () {
     // Create booking in BookingManager (must be called by traveler who has TravelerSBT)
     await bookingManager
       .connect(traveler)
-      .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress);
+      .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address);
 
     // Deploy TravelEscrow
     const TravelEscrowFactory = await ethers.getContractFactory("TravelEscrow");
@@ -603,7 +603,14 @@ describe("TravelEscrow", function () {
         // Create booking in BookingManager
         await bookingManager
           .connect(traveler)
-          .bookRoom(tokenId, futureCheckIn, futureCheckOut, 2, ethers.ZeroAddress);
+          .bookRoom(
+            tokenId,
+            futureCheckIn,
+            futureCheckOut,
+            2,
+            ethers.ZeroAddress,
+            traveler.address
+          );
 
         const bookings = await bookingManager.getBookings(tokenId);
         const bookingIndex = Number(bookings.length) - 1;
@@ -659,7 +666,14 @@ describe("TravelEscrow", function () {
         // Create booking in BookingManager
         await bookingManager
           .connect(traveler)
-          .bookRoom(tokenId, futureCheckIn, futureCheckOut, 2, ethers.ZeroAddress);
+          .bookRoom(
+            tokenId,
+            futureCheckIn,
+            futureCheckOut,
+            2,
+            ethers.ZeroAddress,
+            traveler.address
+          );
 
         const bookings = await bookingManager.getBookings(tokenId);
         const bookingIndex = Number(bookings.length) - 1;
@@ -718,7 +732,14 @@ describe("TravelEscrow", function () {
         // Create booking in BookingManager
         await bookingManager
           .connect(traveler)
-          .bookRoom(tokenId, futureCheckIn, futureCheckOut, 2, ethers.ZeroAddress);
+          .bookRoom(
+            tokenId,
+            futureCheckIn,
+            futureCheckOut,
+            2,
+            ethers.ZeroAddress,
+            traveler.address
+          );
 
         const bookings = await bookingManager.getBookings(tokenId);
         const bookingIndex = Number(bookings.length) - 1;
@@ -769,7 +790,7 @@ describe("TravelEscrow", function () {
       // Create booking in BookingManager
       await bookingManager
         .connect(traveler)
-        .bookRoom(tokenId, futureCheckIn, futureCheckOut, 2, ethers.ZeroAddress);
+        .bookRoom(tokenId, futureCheckIn, futureCheckOut, 2, ethers.ZeroAddress, traveler.address);
       const bookings = await bookingManager.getBookings(tokenId);
       const bookingIndex = Number(bookings.length) - 1;
 
@@ -800,7 +821,7 @@ describe("TravelEscrow", function () {
       // Create booking in BookingManager
       await bookingManager
         .connect(traveler)
-        .bookRoom(tokenId, futureCheckIn, futureCheckOut, 2, ethers.ZeroAddress);
+        .bookRoom(tokenId, futureCheckIn, futureCheckOut, 2, ethers.ZeroAddress, traveler.address);
       const bookings = await bookingManager.getBookings(tokenId);
       const bookingIndex = Number(bookings.length) - 1;
 
@@ -831,7 +852,7 @@ describe("TravelEscrow", function () {
       // Create booking in BookingManager
       await bookingManager
         .connect(traveler)
-        .bookRoom(tokenId, futureCheckIn, futureCheckOut, 2, ethers.ZeroAddress);
+        .bookRoom(tokenId, futureCheckIn, futureCheckOut, 2, ethers.ZeroAddress, traveler.address);
       const bookings = await bookingManager.getBookings(tokenId);
       const bookingIndex = Number(bookings.length) - 1;
 

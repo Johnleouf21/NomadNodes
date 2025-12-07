@@ -38,9 +38,10 @@ contract PropertyNFTAdapter is IPropertyNFT {
         uint256 checkInDate,
         uint256 checkOutDate,
         uint256 numGuests,
-        address escrowAddress
+        address escrowAddress,
+        address traveler
     ) external override returns (uint256 bookingIndex) {
-        return bookingManager.bookRoom(tokenId, checkInDate, checkOutDate, numGuests, escrowAddress);
+        return bookingManager.bookRoom(tokenId, checkInDate, checkOutDate, numGuests, escrowAddress, traveler);
     }
 
     function setEscrowAddress(uint256 tokenId, uint256 bookingIndex, address escrowAddress) external override {

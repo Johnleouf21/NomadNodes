@@ -164,11 +164,11 @@ describe("PropertyNFTAdapter", function () {
     });
 
     it("should book room via adapter", async function () {
-      // Note: bookRoom checks msg.sender == propertyNFTAdapter and uses tx.origin as traveler
+      // Note: bookRoom uses explicit traveler address for Account Abstraction support
       await expect(
         propertyNFTAdapter
           .connect(traveler)
-          .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress)
+          .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address)
       ).to.emit(bookingManager, "BookingCreated");
 
       const booking = await propertyNFTAdapter.getBooking(tokenId, 0);
@@ -179,7 +179,7 @@ describe("PropertyNFTAdapter", function () {
     it("should get booking via adapter", async function () {
       await propertyNFTAdapter
         .connect(traveler)
-        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress);
+        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address);
 
       const booking = await propertyNFTAdapter.getBooking(tokenId, 0);
       expect(booking.tokenId).to.equal(tokenId);
@@ -191,7 +191,7 @@ describe("PropertyNFTAdapter", function () {
     it("should set escrow address via adapter", async function () {
       await propertyNFTAdapter
         .connect(traveler)
-        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress);
+        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address);
 
       await propertyNFTAdapter.setEscrowAddress(tokenId, 0, platform.address);
 
@@ -202,7 +202,7 @@ describe("PropertyNFTAdapter", function () {
     it("should confirm booking via adapter", async function () {
       await propertyNFTAdapter
         .connect(traveler)
-        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress);
+        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address);
 
       await expect(propertyNFTAdapter.confirmBooking(tokenId, 0)).to.emit(
         bookingManager,
@@ -216,7 +216,7 @@ describe("PropertyNFTAdapter", function () {
     it("should complete booking via adapter", async function () {
       await propertyNFTAdapter
         .connect(traveler)
-        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress);
+        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address);
       await propertyNFTAdapter.confirmBooking(tokenId, 0);
       await bookingManager.connect(host).checkInBooking(tokenId, 0);
 
@@ -232,7 +232,7 @@ describe("PropertyNFTAdapter", function () {
     it("should cancel booking via adapter", async function () {
       await propertyNFTAdapter
         .connect(traveler)
-        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress);
+        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address);
 
       await expect(propertyNFTAdapter.connect(traveler).cancelBooking(tokenId, 0)).to.emit(
         bookingManager,

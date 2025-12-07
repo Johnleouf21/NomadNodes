@@ -132,7 +132,9 @@ describe("BookingManager", function () {
   describe("Book Room", function () {
     it("should create a booking", async function () {
       await expect(
-        bookingManager.connect(traveler).bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress)
+        bookingManager
+          .connect(traveler)
+          .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address)
       )
         .to.emit(bookingManager, "BookingCreated")
         .withArgs(tokenId, 0, traveler.address, checkIn, checkOut, 320); // (100*3) + 20 = 320
@@ -147,7 +149,9 @@ describe("BookingManager", function () {
 
     it("should revert if traveler has no SBT", async function () {
       await expect(
-        bookingManager.connect(owner).bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress)
+        bookingManager
+          .connect(owner)
+          .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address)
       ).to.be.revertedWithCustomError(bookingManager, "MustHaveTravelerSBT");
     });
 
@@ -155,7 +159,9 @@ describe("BookingManager", function () {
       await roomTypeNFT.connect(host).setRoomTypeActive(tokenId, false);
 
       await expect(
-        bookingManager.connect(traveler).bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress)
+        bookingManager
+          .connect(traveler)
+          .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address)
       ).to.be.revertedWithCustomError(bookingManager, "RoomTypeNotActive");
     });
 
@@ -164,25 +170,29 @@ describe("BookingManager", function () {
       for (let i = 0; i < 5; i++) {
         await bookingManager
           .connect(traveler)
-          .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress);
+          .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address);
       }
 
       // 6th booking should fail (no more units available)
       await expect(
-        bookingManager.connect(traveler).bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress)
+        bookingManager
+          .connect(traveler)
+          .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address)
       ).to.be.revertedWithCustomError(bookingManager, "NoAvailableUnits");
     });
 
     it("should revert if invalid date range", async function () {
       await expect(
-        bookingManager.connect(traveler).bookRoom(tokenId, checkOut, checkIn, 2, ethers.ZeroAddress)
+        bookingManager
+          .connect(traveler)
+          .bookRoom(tokenId, checkOut, checkIn, 2, ethers.ZeroAddress, traveler.address)
       ).to.be.revertedWithCustomError(bookingManager, "InvalidDateRange");
     });
 
     it("should mark unit as unavailable after booking", async function () {
       await bookingManager
         .connect(traveler)
-        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress);
+        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address);
 
       // Unit 0 should now be unavailable
       expect(await availabilityManager.isRoomAvailable(tokenId, 0, checkIn, checkOut)).to.be.false;
@@ -191,7 +201,7 @@ describe("BookingManager", function () {
     it("should increment property booking count", async function () {
       await bookingManager
         .connect(traveler)
-        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress);
+        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address);
 
       const property = await propertyRegistry.getProperty(1);
       expect(property.totalBookings).to.equal(1);
@@ -199,7 +209,9 @@ describe("BookingManager", function () {
 
     it("should link booking to traveler SBT", async function () {
       await expect(
-        bookingManager.connect(traveler).bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress)
+        bookingManager
+          .connect(traveler)
+          .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address)
       ).to.emit(travelerSBT, "BookingLinked");
     });
   });
@@ -208,7 +220,7 @@ describe("BookingManager", function () {
     beforeEach(async function () {
       await bookingManager
         .connect(traveler)
-        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress);
+        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address);
     });
 
     it("should confirm pending booking", async function () {
@@ -239,7 +251,7 @@ describe("BookingManager", function () {
     beforeEach(async function () {
       await bookingManager
         .connect(traveler)
-        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress);
+        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address);
       await bookingManager.connect(owner).confirmBooking(tokenId, 0);
     });
 
@@ -271,7 +283,14 @@ describe("BookingManager", function () {
     it("should revert if booking not confirmed", async function () {
       await bookingManager
         .connect(traveler)
-        .bookRoom(tokenId, checkIn + 86400 * 10, checkOut + 86400 * 10, 2, ethers.ZeroAddress);
+        .bookRoom(
+          tokenId,
+          checkIn + 86400 * 10,
+          checkOut + 86400 * 10,
+          2,
+          ethers.ZeroAddress,
+          traveler.address
+        );
 
       await expect(
         bookingManager.connect(host).checkInBooking(tokenId, 1)
@@ -283,7 +302,7 @@ describe("BookingManager", function () {
     beforeEach(async function () {
       await bookingManager
         .connect(traveler)
-        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress);
+        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address);
       await bookingManager.connect(owner).confirmBooking(tokenId, 0);
       await bookingManager.connect(host).checkInBooking(tokenId, 0);
     });
@@ -313,7 +332,14 @@ describe("BookingManager", function () {
     it("should revert if not checked in", async function () {
       await bookingManager
         .connect(traveler)
-        .bookRoom(tokenId, checkIn + 86400 * 10, checkOut + 86400 * 10, 2, ethers.ZeroAddress);
+        .bookRoom(
+          tokenId,
+          checkIn + 86400 * 10,
+          checkOut + 86400 * 10,
+          2,
+          ethers.ZeroAddress,
+          traveler.address
+        );
       await bookingManager.connect(owner).confirmBooking(tokenId, 1);
 
       await expect(
@@ -326,7 +352,7 @@ describe("BookingManager", function () {
     beforeEach(async function () {
       await bookingManager
         .connect(traveler)
-        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress);
+        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address);
     });
 
     it("should allow traveler to cancel", async function () {
@@ -389,10 +415,17 @@ describe("BookingManager", function () {
     beforeEach(async function () {
       await bookingManager
         .connect(traveler)
-        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress);
+        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address);
       await bookingManager
         .connect(traveler)
-        .bookRoom(tokenId, checkIn + 86400 * 10, checkOut + 86400 * 10, 2, ethers.ZeroAddress);
+        .bookRoom(
+          tokenId,
+          checkIn + 86400 * 10,
+          checkOut + 86400 * 10,
+          2,
+          ethers.ZeroAddress,
+          traveler.address
+        );
     });
 
     it("should get all bookings for tokenId", async function () {
@@ -470,7 +503,7 @@ describe("BookingManager", function () {
     beforeEach(async function () {
       await bookingManager
         .connect(traveler)
-        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress);
+        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address);
     });
 
     it("should set escrow address", async function () {
@@ -555,7 +588,7 @@ describe("BookingManager", function () {
       await expect(
         bookingManager
           .connect(traveler)
-          .bookRoom(invalidTokenId, checkIn, checkOut, 2, ethers.ZeroAddress)
+          .bookRoom(invalidTokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address)
       ).to.be.revertedWithCustomError(roomTypeNFT, "RoomTypeNotFound");
     });
   });
@@ -619,7 +652,7 @@ describe("BookingManager", function () {
       // First create a booking
       await bookingManager
         .connect(traveler)
-        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress);
+        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address);
 
       await bookingManager.setEscrowFactory(owner.address);
 
@@ -631,7 +664,7 @@ describe("BookingManager", function () {
     it("should revert setEscrowAddress if not escrow factory", async function () {
       await bookingManager
         .connect(traveler)
-        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress);
+        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address);
 
       await expect(
         bookingManager.connect(traveler).setEscrowAddress(tokenId, 0, platform.address)
