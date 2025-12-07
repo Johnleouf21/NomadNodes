@@ -24,9 +24,5 @@ RUN pnpm codegen
 # Expose Ponder's default port
 EXPOSE 42069
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:42069/health', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"
-
 # Start Ponder in production mode
 CMD ["pnpm", "start"]

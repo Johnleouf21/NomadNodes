@@ -6,18 +6,23 @@ import { client, graphql } from "ponder";
 
 const app = new Hono();
 
-// Enable CORS for all origins (frontend can be on localhost or production)
+// CORS configuration from environment variable
+// Format: comma-separated list of origins, e.g. "http://localhost:3000,https://nomadnodes.com"
+// If not set, defaults to allowing all origins (for development)
+const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
+  ? process.env.CORS_ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+  : ["*"];
+
 app.use(
   "*",
   cors({
-    origin: "*",
+    origin: allowedOrigins.includes("*")
+      ? "*"
+      : (origin) => (allowedOrigins.includes(origin) ? origin : null),
     allowMethods: ["GET", "POST", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
   })
 );
-
-// Health check endpoint for Railway
-app.get("/health", (c) => c.json({ status: "ok" }));
 
 app.use("/sql/*", client({ db, schema }));
 
