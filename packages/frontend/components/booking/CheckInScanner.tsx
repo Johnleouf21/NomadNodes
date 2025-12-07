@@ -21,6 +21,7 @@ import { usePonderBookings, type PonderBooking } from "@/hooks/usePonderBookings
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { toast } from "sonner";
+import { CONTRACTS } from "@/lib/contracts";
 
 const ESCROW_ABI = [
   {
@@ -46,6 +47,8 @@ interface MatchedBooking {
   checkOutDate: string;
   escrowAddress?: string;
   roomName?: string;
+  tokenId: string;
+  bookingIndex: string;
 }
 
 // Get bookings that are eligible for check-in today
@@ -90,9 +93,28 @@ export function CheckInScanner() {
   // Get eligible bookings for check-in
   const eligibleBookings = React.useMemo(() => getEligibleBookings(bookings), [bookings]);
 
-  // Confirm stay mutation
+  // Confirm stay mutation (escrow)
   const { writeContract, data: txHash, isPending, error: txError } = useWriteContract();
   const { isLoading: isTxLoading, isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
+
+  // CheckIn booking mutation (BookingManager) - called after escrow confirmStay succeeds
+  const {
+    writeContract: writeCheckIn,
+    data: checkInTxHash,
+    isPending: isCheckInPending,
+    error: checkInTxError,
+  } = useWriteContract();
+  const { isLoading: isCheckInLoading, isSuccess: isCheckInSuccess } = useWaitForTransactionReceipt(
+    {
+      hash: checkInTxHash,
+    }
+  );
+
+  // Track pending booking for chained calls
+  const [pendingBookingForCheckIn, setPendingBookingForCheckIn] = React.useState<{
+    tokenId: string;
+    bookingIndex: string;
+  } | null>(null);
 
   // Handle QR scan from URL (when user clicks QR code link)
   React.useEffect(() => {
@@ -158,17 +180,29 @@ export function CheckInScanner() {
       propertyId: booking.propertyId,
       checkInDate: booking.checkInDate.toString(),
       checkOutDate: booking.checkOutDate.toString(),
-      escrowAddress: booking.escrowAddress,
+      escrowAddress: booking.escrowAddress || undefined,
+      tokenId: booking.tokenId,
+      bookingIndex: booking.bookingIndex,
     });
   };
 
-  const handleConfirmCheckIn = (escrowAddress: string) => {
+  const handleConfirmCheckIn = (booking: {
+    escrowAddress?: string | null;
+    tokenId: string;
+    bookingIndex: string;
+  }) => {
+    if (!booking.escrowAddress) return;
+    // Store booking info for chained checkInBooking call
+    setPendingBookingForCheckIn({ tokenId: booking.tokenId, bookingIndex: booking.bookingIndex });
     writeContract({
-      address: escrowAddress as `0x${string}`,
+      address: booking.escrowAddress as `0x${string}`,
       abi: ESCROW_ABI,
       functionName: "confirmStay",
     });
-    setSelectedBookingId(escrowAddress);
+    setSelectedBookingId(booking.escrowAddress);
+    toast.info("Processing check-in...", {
+      description: "Step 1/2: Confirm payment release",
+    });
   };
 
   const handleOpenScanner = () => {
@@ -181,18 +215,38 @@ export function CheckInScanner() {
     setScannedData(null);
     setMatchedBooking(null);
     setSelectedBookingId(null);
+    setPendingBookingForCheckIn(null);
     setError(null);
     setIsScanning(false);
   };
 
+  // After escrow confirmStay succeeds, call BookingManager.checkInBooking
   React.useEffect(() => {
-    if (isSuccess) {
-      toast.success("Check-in confirmed! Payment will be released to host.");
+    if (isSuccess && pendingBookingForCheckIn) {
+      toast.success("Payment released! Updating booking status...", {
+        description: "Step 2/2: Please confirm in your wallet",
+      });
+      writeCheckIn({
+        ...CONTRACTS.bookingManager,
+        functionName: "checkInBooking",
+        args: [
+          BigInt(pendingBookingForCheckIn.tokenId),
+          BigInt(pendingBookingForCheckIn.bookingIndex),
+        ],
+      });
+    }
+  }, [isSuccess, pendingBookingForCheckIn, writeCheckIn]);
+
+  // After checkInBooking succeeds, show final success message
+  React.useEffect(() => {
+    if (isCheckInSuccess) {
+      toast.success("Check-in complete! Enjoy your stay.");
       handleReset();
       refetch();
     }
-  }, [isSuccess, refetch]);
+  }, [isCheckInSuccess, refetch]);
 
+  // Handle escrow transaction error
   React.useEffect(() => {
     if (txError) {
       const errorMsg = txError.message;
@@ -204,8 +258,19 @@ export function CheckInScanner() {
         toast.error("Transaction failed. Please try again.");
       }
       setSelectedBookingId(null);
+      setPendingBookingForCheckIn(null);
     }
   }, [txError]);
+
+  // Handle checkInBooking transaction error
+  React.useEffect(() => {
+    if (checkInTxError) {
+      // Payment was released but booking status update failed - still consider it a success
+      toast.warning("Payment released but booking status update failed. This is not critical.");
+      handleReset();
+      refetch();
+    }
+  }, [checkInTxError, refetch]);
 
   return (
     <Card>
@@ -275,12 +340,12 @@ export function CheckInScanner() {
                         </div>
                       ) : booking.escrowAddress ? (
                         <Button
-                          onClick={() => handleConfirmCheckIn(booking.escrowAddress!)}
-                          disabled={isConfirming}
+                          onClick={() => handleConfirmCheckIn(booking)}
+                          disabled={isConfirming || isCheckInPending || isCheckInLoading}
                           className="w-full"
                           size="sm"
                         >
-                          {isConfirming ? (
+                          {isConfirming || isCheckInPending || isCheckInLoading ? (
                             <>
                               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                               Confirming...
@@ -356,12 +421,12 @@ export function CheckInScanner() {
                 </div>
 
                 <Button
-                  onClick={() => handleConfirmCheckIn(matchedBooking.escrowAddress!)}
-                  disabled={isPending || isTxLoading}
+                  onClick={() => handleConfirmCheckIn(matchedBooking)}
+                  disabled={isPending || isTxLoading || isCheckInPending || isCheckInLoading}
                   className="w-full"
                   size="lg"
                 >
-                  {isPending || isTxLoading ? (
+                  {isPending || isTxLoading || isCheckInPending || isCheckInLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Confirming Check-In...

@@ -137,9 +137,12 @@ export function HostRevenue({ bookings, getPropertyInfo, getRoomTypeInfo }: Host
   const [withdrawingEscrow, setWithdrawingEscrow] = React.useState<string | null>(null);
   const [releasingEscrow, setReleasingEscrow] = React.useState<string | null>(null);
 
-  // Filter completed bookings with escrow addresses
-  const completedWithEscrow = React.useMemo(() => {
-    return bookings.filter((b) => b.status === "Completed" && b.escrowAddress);
+  // Filter bookings with escrow addresses where funds may be available
+  // Include both CheckedIn (escrow may be completed) and Completed bookings
+  const bookingsWithEscrow = React.useMemo(() => {
+    return bookings.filter(
+      (b) => (b.status === "Completed" || b.status === "CheckedIn") && b.escrowAddress
+    );
   }, [bookings]);
 
   // Prepare contract read calls for all escrows
@@ -150,7 +153,7 @@ export function HostRevenue({ bookings, getPropertyInfo, getRoomTypeInfo }: Host
       functionName: string;
     }[] = [];
 
-    completedWithEscrow.forEach((booking) => {
+    bookingsWithEscrow.forEach((booking) => {
       const address = booking.escrowAddress as `0x${string}`;
       calls.push(
         { address, abi: ESCROW_ABI, functionName: "status" },
@@ -164,7 +167,7 @@ export function HostRevenue({ bookings, getPropertyInfo, getRoomTypeInfo }: Host
     });
 
     return calls;
-  }, [completedWithEscrow]);
+  }, [bookingsWithEscrow]);
 
   // Read all escrow data
   const { data: escrowData, isLoading: loadingEscrows } = useReadContracts({
@@ -182,7 +185,7 @@ export function HostRevenue({ bookings, getPropertyInfo, getRoomTypeInfo }: Host
       args: [`0x${string}`];
     }[] = [];
 
-    completedWithEscrow.forEach((booking, index) => {
+    bookingsWithEscrow.forEach((booking, index) => {
       const tokenIndex = index * 7 + 5; // token is the 6th call (index 5) for each escrow, 7 calls per escrow
       const tokenResult = escrowData[tokenIndex];
       const tokenAddress = tokenResult?.result as `0x${string}` | undefined;
@@ -198,7 +201,7 @@ export function HostRevenue({ bookings, getPropertyInfo, getRoomTypeInfo }: Host
     });
 
     return calls;
-  }, [escrowData, completedWithEscrow]);
+  }, [escrowData, bookingsWithEscrow]);
 
   // Read balances
   const { data: balanceData } = useReadContracts({
@@ -210,7 +213,7 @@ export function HostRevenue({ bookings, getPropertyInfo, getRoomTypeInfo }: Host
   const escrowInfos: EscrowInfo[] = React.useMemo(() => {
     if (!escrowData) return [];
 
-    return completedWithEscrow.map((booking, index) => {
+    return bookingsWithEscrow.map((booking, index) => {
       const baseIndex = index * 7; // 7 calls per escrow now
       return {
         booking,
@@ -224,7 +227,7 @@ export function HostRevenue({ bookings, getPropertyInfo, getRoomTypeInfo }: Host
         checkInTimestamp: escrowData[baseIndex + 6]?.result as bigint | undefined,
       };
     });
-  }, [escrowData, balanceData, completedWithEscrow]);
+  }, [escrowData, balanceData, bookingsWithEscrow]);
 
   // Filter escrows with pending withdrawals
   const pendingWithdrawals = React.useMemo(() => {

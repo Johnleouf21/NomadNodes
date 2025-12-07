@@ -145,10 +145,27 @@ export function HostBookingCard({
   const totalPrice = Number(booking.totalPrice) / 1e6; // Stablecoin has 6 decimals
   const currencyLabel = currency === "EUR" ? "EURC" : "USDC";
 
+  // Date validation for actions
+  const now = new Date();
+  const checkInDate = new Date(Number(booking.checkInDate) * 1000);
+  const checkOutDate = new Date(Number(booking.checkOutDate) * 1000);
+
+  // Host can only mark check-in after 23:59 UTC of check-in day
+  // (gives traveler the full day to check in themselves)
+  const checkInDayEnd = new Date(checkInDate);
+  checkInDayEnd.setUTCHours(23, 59, 59, 999);
+  const isCheckInDayEnded = now > checkInDayEnd;
+
+  const isCheckOutDateReached = now >= checkOutDate;
+
   const canConfirm = booking.status === "Pending";
-  const canCheckIn = booking.status === "Confirmed";
-  const canComplete = booking.status === "CheckedIn";
+  const canCheckIn = booking.status === "Confirmed" && isCheckInDayEnded;
+  const canComplete = booking.status === "CheckedIn" && isCheckOutDateReached;
   const canCancel = booking.status === "Pending" || booking.status === "Confirmed";
+
+  // Check if action should show disabled state (status matches but date not reached)
+  const showCheckInDisabled = booking.status === "Confirmed" && !isCheckInDayEnded;
+  const showCompleteDisabled = booking.status === "CheckedIn" && !isCheckOutDateReached;
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -276,6 +293,21 @@ export function HostBookingCard({
                     Check-in
                   </Button>
                 )}
+                {showCheckInDisabled && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="sm" variant="outline" disabled className="gap-1.5">
+                          <Clock className="h-4 w-4" />
+                          Check-in
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Available after 23:59 UTC on {formatDate(booking.checkInDate)}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
                 {canComplete && onComplete && (
                   <Button
                     size="sm"
@@ -290,6 +322,21 @@ export function HostBookingCard({
                     )}
                     Complete
                   </Button>
+                )}
+                {showCompleteDisabled && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="sm" variant="outline" disabled className="gap-1.5">
+                          <Clock className="h-4 w-4" />
+                          Complete
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Available after {formatDate(booking.checkOutDate)}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
                 {booking.status === "Completed" && (
                   <Badge variant="outline" className="text-green-600">

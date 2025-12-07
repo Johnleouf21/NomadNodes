@@ -1,5 +1,4 @@
 "use client";
-/* eslint-disable @typescript-eslint/no-unused-vars */
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
@@ -18,7 +17,6 @@ import { Progress } from "@/components/ui/progress";
 import {
   Calendar,
   User,
-  Wallet,
   ExternalLink,
   MessageSquare,
   XCircle,
@@ -30,9 +28,7 @@ import {
   Shield,
   CheckCircle2,
   LogIn,
-  ArrowRight,
   Hash,
-  FileText,
   AlertTriangle,
   BedDouble,
   Loader2,
@@ -255,11 +251,35 @@ export function HostBookingDetailSheet({
   const hostReceives = escrowTotal - fee;
   const currentRefundPercent = refundPercentage !== undefined ? Number(refundPercentage) : 0;
 
+  // Date validation for actions
+  const now = new Date();
+  const checkInDate = new Date(Number(booking.checkInDate) * 1000);
+  const checkOutDate = new Date(Number(booking.checkOutDate) * 1000);
+
+  // Host can only mark check-in after 23:59 UTC of check-in day
+  // (gives traveler the full day to check in themselves)
+  const checkInDayEnd = new Date(checkInDate);
+  checkInDayEnd.setUTCHours(23, 59, 59, 999);
+  const isCheckInDayEnded = now > checkInDayEnd;
+
+  // Complete can only happen on or after the checkout date
+  const isCheckOutDateReached = now >= checkOutDate;
+
   // Actions availability
   const canConfirm = booking.status === "Pending";
-  const canCheckIn = booking.status === "Confirmed";
-  const canComplete = booking.status === "CheckedIn";
+  const canCheckIn = booking.status === "Confirmed" && isCheckInDayEnded;
+  const canComplete = booking.status === "CheckedIn" && isCheckOutDateReached;
   const canCancel = booking.status === "Pending" || booking.status === "Confirmed";
+
+  // Messages for disabled buttons
+  const checkInDisabledReason =
+    booking.status === "Confirmed" && !isCheckInDayEnded
+      ? `Check-in available after 23:59 UTC on ${formatDate(booking.checkInDate)}`
+      : null;
+  const completeDisabledReason =
+    booking.status === "CheckedIn" && !isCheckOutDateReached
+      ? `Complete available after checkout on ${formatDate(booking.checkOutDate)}`
+      : null;
 
   const copyToClipboard = async (text: string, field: string) => {
     await navigator.clipboard.writeText(text);
@@ -611,40 +631,58 @@ export function HostBookingDetailSheet({
               </Button>
             )}
 
-            {canCheckIn && onCheckIn && (
-              <Button
-                className="w-full bg-purple-600 hover:bg-purple-700"
-                onClick={() => {
-                  onCheckIn();
-                  onOpenChange(false);
-                }}
-                disabled={isActionPending}
-              >
-                {isActionPending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            {booking.status === "Confirmed" && onCheckIn && (
+              <>
+                {canCheckIn ? (
+                  <Button
+                    className="w-full bg-purple-600 hover:bg-purple-700"
+                    onClick={() => {
+                      onCheckIn();
+                      onOpenChange(false);
+                    }}
+                    disabled={isActionPending}
+                  >
+                    {isActionPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <LogIn className="mr-2 h-4 w-4" />
+                    )}
+                    Mark as Checked In
+                  </Button>
                 ) : (
-                  <LogIn className="mr-2 h-4 w-4" />
+                  <Button className="w-full" variant="outline" disabled>
+                    <Clock className="mr-2 h-4 w-4" />
+                    {checkInDisabledReason}
+                  </Button>
                 )}
-                Mark as Checked In
-              </Button>
+              </>
             )}
 
-            {canComplete && onComplete && (
-              <Button
-                className="w-full bg-green-600 hover:bg-green-700"
-                onClick={() => {
-                  onComplete();
-                  onOpenChange(false);
-                }}
-                disabled={isActionPending}
-              >
-                {isActionPending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            {booking.status === "CheckedIn" && onComplete && (
+              <>
+                {canComplete ? (
+                  <Button
+                    className="w-full bg-green-600 hover:bg-green-700"
+                    onClick={() => {
+                      onComplete();
+                      onOpenChange(false);
+                    }}
+                    disabled={isActionPending}
+                  >
+                    {isActionPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                    )}
+                    Complete & Release Payment
+                  </Button>
                 ) : (
-                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  <Button className="w-full" variant="outline" disabled>
+                    <Clock className="mr-2 h-4 w-4" />
+                    {completeDisabledReason}
+                  </Button>
                 )}
-                Complete & Release Payment
-              </Button>
+              </>
             )}
 
             {/* Secondary Actions */}

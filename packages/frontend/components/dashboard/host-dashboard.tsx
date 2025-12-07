@@ -49,6 +49,17 @@ import { CONTRACTS } from "@/lib/contracts";
 import { toast } from "sonner";
 import { HostAnalytics, HostRevenue } from "./analytics";
 
+// Escrow ABI for autoReleaseToHost
+const ESCROW_ABI = [
+  {
+    inputs: [],
+    name: "autoReleaseToHost",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+] as const;
+
 export function HostDashboard() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -68,12 +79,26 @@ export function HostDashboard() {
 
   // Action state
   const [pendingAction, setPendingAction] = React.useState<string | null>(null);
+  const [pendingEscrowRelease, setPendingEscrowRelease] = React.useState<PonderBooking | null>(
+    null
+  );
 
-  // Contract interactions
+  // Contract interactions for BookingManager
   const { writeContract, data: txHash, isPending: isWritePending } = useWriteContract();
   const { isLoading: isTxLoading, isSuccess: isTxSuccess } = useWaitForTransactionReceipt({
     hash: txHash,
   });
+
+  // Contract interactions for Escrow (autoReleaseToHost after check-in)
+  const {
+    writeContract: writeEscrow,
+    data: escrowTxHash,
+    isPending: isEscrowWritePending,
+  } = useWriteContract();
+  const { isLoading: isEscrowTxLoading, isSuccess: isEscrowTxSuccess } =
+    useWaitForTransactionReceipt({
+      hash: escrowTxHash,
+    });
 
   // Fetch user's properties from Ponder (by host address)
   const {
@@ -193,15 +218,38 @@ export function HostDashboard() {
     fetchRoomTypes();
   }, [propertyIdStrings]);
 
-  // Handle transaction success
+  // Handle BookingManager transaction success
   React.useEffect(() => {
     if (isTxSuccess && pendingAction) {
-      toast.success("Action completed successfully");
-      setPendingAction(null);
+      // If we have a pending escrow release (from check-in), trigger it now
+      if (pendingEscrowRelease && pendingEscrowRelease.escrowAddress) {
+        toast.success("Check-in confirmed! Now releasing payment...", {
+          description: "Please confirm the second transaction",
+        });
+        writeEscrow({
+          address: pendingEscrowRelease.escrowAddress as `0x${string}`,
+          abi: ESCROW_ABI,
+          functionName: "autoReleaseToHost",
+        });
+        setPendingAction(null);
+      } else {
+        toast.success("Action completed successfully");
+        setPendingAction(null);
+        // Refetch bookings after a short delay to allow indexer to catch up
+        setTimeout(() => refetchBookings(), 2000);
+      }
+    }
+  }, [isTxSuccess, pendingAction, pendingEscrowRelease, writeEscrow, refetchBookings]);
+
+  // Handle Escrow transaction success
+  React.useEffect(() => {
+    if (isEscrowTxSuccess && pendingEscrowRelease) {
+      toast.success("Payment released! You can now withdraw in the Revenue tab.");
+      setPendingEscrowRelease(null);
       // Refetch bookings after a short delay to allow indexer to catch up
       setTimeout(() => refetchBookings(), 2000);
     }
-  }, [isTxSuccess, pendingAction, refetchBookings]);
+  }, [isEscrowTxSuccess, pendingEscrowRelease, refetchBookings]);
 
   // Create property lookup map for quick access
   const propertyMap = React.useMemo(() => {
@@ -333,12 +381,20 @@ export function HostDashboard() {
   const handleCheckIn = React.useCallback(
     (booking: PonderBooking) => {
       setPendingAction(booking.id);
+      // Store the booking for escrow release after check-in succeeds
+      if (booking.escrowAddress) {
+        setPendingEscrowRelease(booking);
+      }
       writeContract({
         ...CONTRACTS.bookingManager,
         functionName: "checkInBooking",
         args: [BigInt(booking.tokenId), BigInt(booking.bookingIndex)],
       });
-      toast.info("Processing check-in...", { description: "Please confirm in your wallet" });
+      toast.info("Processing check-in...", {
+        description: booking.escrowAddress
+          ? "Step 1/2: Confirm check-in in your wallet"
+          : "Please confirm in your wallet",
+      });
     },
     [writeContract]
   );
