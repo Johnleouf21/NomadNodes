@@ -139,6 +139,27 @@ describe("PropertyRegistry", function () {
     });
   });
 
+  describe("Update Property Metadata", function () {
+    beforeEach(async function () {
+      await propertyRegistry.connect(host).createProperty("QmOriginal", "villa", "Paris");
+    });
+
+    it("Should update metadata successfully", async function () {
+      await expect(propertyRegistry.connect(host).updatePropertyMetadata(1, "QmNewHash"))
+        .to.emit(propertyRegistry, "PropertyMetadataUpdated")
+        .withArgs(1, "QmOriginal", "QmNewHash");
+
+      const property = await propertyRegistry.getProperty(1);
+      expect(property.ipfsMetadataHash).to.equal("QmNewHash");
+    });
+
+    it("Should revert if not property owner", async function () {
+      await expect(
+        propertyRegistry.connect(owner).updatePropertyMetadata(1, "QmNewHash")
+      ).to.be.revertedWithCustomError(propertyRegistry, "NotPropertyOwner");
+    });
+  });
+
   describe("Transfer Property Ownership", function () {
     let newOwner: Awaited<ReturnType<typeof ethers.getSigners>>[0];
 

@@ -512,6 +512,41 @@ describe("EscrowFactory", function () {
         })
       ).to.be.revertedWithCustomError(escrowFactory, "EnforcedPause");
     });
+
+    it("should revert if host tries to book their own property", async function () {
+      const price = BigInt(320_000000);
+      const validUntil = (await time.latest()) + 3600;
+      const quantity = 2;
+
+      const signature = await signQuote(
+        tokenId,
+        checkIn,
+        checkOut,
+        price,
+        await usdc.getAddress(),
+        validUntil,
+        quantity,
+        await escrowFactory.getAddress()
+      );
+
+      // Give host some USDC
+      await usdc.mint(host.address, price);
+      await usdc.connect(host).approve(await escrowFactory.getAddress(), price);
+
+      // Host tries to book their own property
+      await expect(
+        escrowFactory.connect(host).createTravelEscrowWithQuote({
+          tokenId,
+          checkIn,
+          checkOut,
+          price,
+          currency: await usdc.getAddress(),
+          validUntil,
+          quantity,
+          signature,
+        })
+      ).to.be.revertedWithCustomError(escrowFactory, "InvalidAddress");
+    });
   });
 
   describe("Additional View Functions", function () {
