@@ -38,20 +38,6 @@ const ESCROW_ABI = [
     stateMutability: "view",
     type: "function",
   },
-  {
-    inputs: [],
-    name: "GUEST_GRACE_PERIOD",
-    outputs: [{ type: "uint256", name: "" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "AUTO_RELEASE_DELAY",
-    outputs: [{ type: "uint256", name: "" }],
-    stateMutability: "view",
-    type: "function",
-  },
 ] as const;
 
 interface CheckInActionsProps {
@@ -80,18 +66,6 @@ export function CheckInActions({
     functionName: "checkIn",
   });
 
-  const { data: gracePeriod } = useReadContract({
-    address: escrowAddress as `0x${string}`,
-    abi: ESCROW_ABI,
-    functionName: "GUEST_GRACE_PERIOD",
-  });
-
-  const { data: autoReleaseDelay } = useReadContract({
-    address: escrowAddress as `0x${string}`,
-    abi: ESCROW_ABI,
-    functionName: "AUTO_RELEASE_DELAY",
-  });
-
   // Confirm stay mutation
   const {
     writeContract: confirmStay,
@@ -118,17 +92,31 @@ export function CheckInActions({
   // Calculate timing
   const now = Date.now();
   const checkInMs = Number(checkInTimestamp) * 1000;
-  const gracePeriodMs = Number(gracePeriod || 4 * 60 * 60) * 1000; // 4h default
-  const autoReleaseDelayMs = Number(autoReleaseDelay || 12 * 60 * 60) * 1000; // 12h default
 
-  const confirmAvailableAt = checkInMs + gracePeriodMs;
-  const autoReleaseAvailableAt = checkInMs + autoReleaseDelayMs;
+  // Traveler can confirm on check-in day (00:00 - 23:59 UTC)
+  const checkInDayStart = new Date(checkInMs);
+  checkInDayStart.setUTCHours(0, 0, 0, 0);
+  const travelerWindowStart = checkInDayStart.getTime();
 
-  const canConfirm = now >= confirmAvailableAt && escrowStatus === 0; // Status.Pending = 0
-  const canAutoRelease = now >= autoReleaseAvailableAt && escrowStatus === 0;
+  const checkInDayEnd = new Date(checkInMs);
+  checkInDayEnd.setUTCHours(23, 59, 59, 999);
+  const travelerWindowEnd = checkInDayEnd.getTime();
 
-  const timeUntilConfirm = Math.max(0, confirmAvailableAt - now);
-  const timeUntilAutoRelease = Math.max(0, autoReleaseAvailableAt - now);
+  // Host can release AFTER 23:59 of check-in day (if traveler didn't confirm)
+  const hostWindowStart = travelerWindowEnd + 1;
+
+  // For traveler: available on check-in day only (00:00 - 23:59)
+  const canConfirm = now >= travelerWindowStart && now <= travelerWindowEnd && escrowStatus === 0;
+
+  // Traveler deadline passed - they missed their window
+  const travelerDeadlinePassed = now > travelerWindowEnd;
+
+  // For host: can release after traveler's deadline (after 23:59)
+  const canAutoRelease = now > travelerWindowEnd && escrowStatus === 0;
+
+  const timeUntilTravelerWindow = Math.max(0, travelerWindowStart - now);
+  const timeUntilTravelerDeadline = Math.max(0, travelerWindowEnd - now);
+  const timeUntilHostWindow = Math.max(0, hostWindowStart - now);
 
   // Success effects
   React.useEffect(() => {
@@ -177,8 +165,14 @@ export function CheckInActions({
     return null;
   }
 
-  // Don't show before check-in date
-  if (now < checkInMs) {
+  // For traveler: show on check-in day only (00:00 - 23:59)
+  // After deadline, traveler can no longer confirm
+  if (isTraveler && (now < travelerWindowStart || travelerDeadlinePassed)) {
+    return null;
+  }
+
+  // For host: show only after traveler's deadline (after 23:59 of check-in day)
+  if (!isTraveler && now <= travelerWindowEnd) {
     return null;
   }
 
@@ -206,16 +200,12 @@ export function CheckInActions({
                   Confirm Your Stay
                 </h4>
                 <p className="text-muted-foreground text-sm">
-                  Available 4h after check-in ({new Date(confirmAvailableAt).toLocaleString()})
+                  Available on check-in day ({checkInDate.toLocaleDateString()})
                 </p>
               </div>
-              {canConfirm ? (
-                <Badge variant="default" className="bg-green-500">
-                  Available
-                </Badge>
-              ) : (
-                <Badge variant="outline">{formatTimeRemaining(timeUntilConfirm)}</Badge>
-              )}
+              <Badge variant="default" className="bg-green-500">
+                Available
+              </Badge>
             </div>
 
             <Button
@@ -236,15 +226,6 @@ export function CheckInActions({
                 </>
               )}
             </Button>
-
-            {!canConfirm && (
-              <Alert>
-                <Clock className="h-4 w-4" />
-                <AlertDescription>
-                  You can confirm your stay {formatTimeRemaining(timeUntilConfirm)}
-                </AlertDescription>
-              </Alert>
-            )}
           </div>
         )}
 
@@ -255,49 +236,41 @@ export function CheckInActions({
               <div>
                 <h4 className="flex items-center gap-2 font-medium">
                   <Clock className="h-4 w-4 text-blue-500" />
-                  Auto-Release Payment
+                  Release Payment
                 </h4>
                 <p className="text-muted-foreground text-sm">
-                  Available 12h after check-in ({new Date(autoReleaseAvailableAt).toLocaleString()})
+                  Guest didn't confirm on {checkInDate.toLocaleDateString()}
                 </p>
               </div>
-              {canAutoRelease ? (
-                <Badge variant="default" className="bg-blue-500">
-                  Available
-                </Badge>
-              ) : (
-                <Badge variant="outline">{formatTimeRemaining(timeUntilAutoRelease)}</Badge>
-              )}
+              <Badge variant="default" className="bg-blue-500">
+                Available
+              </Badge>
             </div>
 
-            {canAutoRelease && (
-              <Button
-                onClick={handleAutoRelease}
-                disabled={isAutoReleasePending || isAutoReleaseLoading}
-                className="w-full"
-                variant="outline"
-                size="lg"
-              >
-                {isAutoReleasePending || isAutoReleaseLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                    Release Payment
-                  </>
-                )}
-              </Button>
-            )}
+            <Button
+              onClick={handleAutoRelease}
+              disabled={!canAutoRelease || isAutoReleasePending || isAutoReleaseLoading}
+              className="w-full"
+              size="lg"
+            >
+              {isAutoReleasePending || isAutoReleaseLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Confirm Guest Arrival & Release Payment
+                </>
+              )}
+            </Button>
 
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                {canAutoRelease
-                  ? "Guest hasn't confirmed their stay. You can now release the payment yourself."
-                  : `Payment will auto-release ${formatTimeRemaining(timeUntilAutoRelease)} if guest doesn't confirm.`}
+                The guest did not confirm their arrival. As the host, you can now release the
+                payment to yourself.
               </AlertDescription>
             </Alert>
           </div>
@@ -310,13 +283,37 @@ export function CheckInActions({
               <span className="text-muted-foreground">Check-in date:</span>
               <span className="font-medium">{checkInDate.toLocaleDateString()}</span>
             </div>
+            {isTraveler && timeUntilTravelerWindow > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Window opens:</span>
+                <span className="font-medium text-yellow-600">
+                  {formatTimeRemaining(timeUntilTravelerWindow)}
+                </span>
+              </div>
+            )}
+            {isTraveler && timeUntilTravelerDeadline > 0 && timeUntilTravelerWindow === 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Time to confirm:</span>
+                <span className="font-medium text-green-600">
+                  {formatTimeRemaining(timeUntilTravelerDeadline)}
+                </span>
+              </div>
+            )}
+            {!isTraveler && timeUntilHostWindow > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Can release:</span>
+                <span className="font-medium text-blue-600">
+                  {formatTimeRemaining(timeUntilHostWindow)}
+                </span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Traveler can confirm:</span>
-              <span className="font-medium">+4h</span>
+              <span className="text-muted-foreground">Traveler window:</span>
+              <span className="font-medium">00:00 - 23:59 UTC</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Auto-release available:</span>
-              <span className="font-medium">+12h</span>
+              <span className="text-muted-foreground">Host can release:</span>
+              <span className="font-medium">After 23:59 UTC</span>
             </div>
           </div>
         </div>

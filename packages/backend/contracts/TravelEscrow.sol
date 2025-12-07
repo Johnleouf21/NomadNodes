@@ -66,9 +66,8 @@ contract TravelEscrow is ReentrancyGuard {
     // Backend signer for off-ramp
     address public backendSigner;
 
-    // Timeline constants (CHANGED: Based on checkIn instead of checkOut)
-    uint256 public constant GUEST_GRACE_PERIOD = 4 hours; // After checkIn - reduced for short stays
-    uint256 public constant AUTO_RELEASE_DELAY = 12 hours; // After checkIn - reduced for 1-night stays
+    // Timeline constants
+    uint256 public constant SECONDS_PER_DAY = 86400;
     uint256 public constant MAX_DISPUTE_WINDOW = 7 days; // After checkOut
 
     // Timestamps
@@ -202,16 +201,36 @@ contract TravelEscrow is ReentrancyGuard {
         emit PaymentPreferenceSet(_preference);
     }
 
-    // ============ INTELLIGENT TIMELINE (CHANGED: Based on checkIn) ============
+    // ============ INTELLIGENT TIMELINE (Day-based) ============
 
     /**
-     * @notice Traveler confirms their stay (4h after checkIn)
+     * @notice Get the start of check-in day (00:00 UTC)
+     * @return Start timestamp of check-in day
+     */
+    function getCheckInDayStart() public view returns (uint256) {
+        return checkIn - (checkIn % SECONDS_PER_DAY);
+    }
+
+    /**
+     * @notice Get the end of check-in day (23:59:59 UTC)
+     * @return End timestamp of check-in day
+     */
+    function getCheckInDayEnd() public view returns (uint256) {
+        return getCheckInDayStart() + SECONDS_PER_DAY - 1;
+    }
+
+    /**
+     * @notice Traveler confirms their stay (available on check-in day: 00:00 - 23:59 UTC)
      * @dev Releases funds to host after confirmation
      */
     function confirmStay() external onlyTraveler inStatus(Status.Pending) nonReentrant {
-        // Must be after checkIn + grace period
-        if (block.timestamp < checkIn + GUEST_GRACE_PERIOD) {
+        // Must be on check-in day (from 00:00 UTC)
+        if (block.timestamp < getCheckInDayStart()) {
             revert TooEarlyForAction();
+        }
+        // Must be before end of check-in day (traveler has until 23:59)
+        if (block.timestamp > getCheckInDayEnd()) {
+            revert DisputeWindowExpired();
         }
 
         confirmStayTimestamp = block.timestamp;
@@ -221,12 +240,12 @@ contract TravelEscrow is ReentrancyGuard {
     }
 
     /**
-     * @notice Auto-release funds to host (12h after checkIn if no dispute)
-     * @dev Anyone can trigger this (permissionless)
+     * @notice Host releases funds (available after check-in day if traveler didn't confirm)
+     * @dev Host can trigger this after 23:59 of check-in day
      */
     function autoReleaseToHost() external inStatus(Status.Pending) nonReentrant {
-        // Must be 12h after checkIn
-        if (block.timestamp < checkIn + AUTO_RELEASE_DELAY) {
+        // Must be after end of check-in day (host takes over after 23:59)
+        if (block.timestamp <= getCheckInDayEnd()) {
             revert TooEarlyForAction();
         }
 
@@ -425,17 +444,19 @@ contract TravelEscrow is ReentrancyGuard {
     }
 
     /**
-     * @notice Check if auto-release is available
+     * @notice Check if host can release payment (after 23:59 of check-in day)
      */
     function canAutoRelease() external view returns (bool) {
-        return (status == Status.Pending && block.timestamp >= checkIn + AUTO_RELEASE_DELAY);
+        return (status == Status.Pending && block.timestamp > getCheckInDayEnd());
     }
 
     /**
-     * @notice Check if traveler can confirm stay
+     * @notice Check if traveler can confirm stay (on check-in day: 00:00 - 23:59 UTC)
      */
     function canConfirmStay() external view returns (bool) {
-        return (status == Status.Pending && block.timestamp >= checkIn + GUEST_GRACE_PERIOD);
+        return (status == Status.Pending &&
+            block.timestamp >= getCheckInDayStart() &&
+            block.timestamp <= getCheckInDayEnd());
     }
 
     /**

@@ -64,6 +64,11 @@
         "internalType": "address",
         "name": "escrowAddress",
         "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "traveler",
+        "type": "address"
       }
     ],
     "name": "bookRoom",

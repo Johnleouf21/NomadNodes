@@ -116,8 +116,27 @@ async function getSingleRoomQuote(params: BookingConfirmationParams): Promise<Bo
   }
 
   const priceInTokenUnits = parseUnits(params.totalAmount.toFixed(6), 6);
-  const checkIn = Math.floor(params.checkIn.getTime() / 1000);
-  const checkOut = Math.floor(params.checkOut.getTime() / 1000);
+  // Normalize dates to UTC midnight using LOCAL date components
+  // This preserves the user's selected date regardless of their timezone
+  // e.g., user selects Dec 6 in Paris (CET) → we send Dec 6 00:00:00 UTC (not Dec 5)
+  const checkInDate = new Date(params.checkIn);
+  let checkIn = Math.floor(
+    Date.UTC(checkInDate.getFullYear(), checkInDate.getMonth(), checkInDate.getDate()) / 1000
+  );
+
+  // CRITICAL: TravelEscrow requires checkIn > block.timestamp
+  // If booking for today and it's past midnight UTC, adjust checkIn to be in the future
+  const now = Math.floor(Date.now() / 1000);
+  if (checkIn <= now) {
+    // Set checkIn to now + 1 hour to ensure it's in the future when tx is mined
+    checkIn = now + 3600;
+  }
+
+  const checkOutDate = new Date(params.checkOut);
+  const checkOut = Math.floor(
+    Date.UTC(checkOutDate.getFullYear(), checkOutDate.getMonth(), checkOutDate.getDate()) / 1000
+  );
+
   const quantity = primaryRoom.quantity || 1;
 
   const response = await fetch("/api/booking/quote", {
@@ -159,17 +178,47 @@ async function getBatchQuote(params: BookingConfirmationParams): Promise<BatchBo
   const tokenAddress =
     params.paymentToken === "USDC" ? CONTRACT_ADDRESSES.usdc : CONTRACT_ADDRESSES.eurc;
 
-  const checkIn = Math.floor(params.checkIn.getTime() / 1000);
-  const checkOut = Math.floor(params.checkOut.getTime() / 1000);
+  // Normalize dates to UTC midnight using LOCAL date components
+  // This preserves the user's selected date regardless of their timezone
+  const checkInDate = new Date(params.checkIn);
+  let checkIn = Math.floor(
+    Date.UTC(checkInDate.getFullYear(), checkInDate.getMonth(), checkInDate.getDate()) / 1000
+  );
 
-  // Calculate price per room type based on proportion of total
-  // In a real implementation, you'd want prices from the room types themselves
-  const totalQuantity = params.rooms.reduce((sum, r) => sum + (r.quantity || 1), 0);
-  const pricePerUnit = params.totalAmount / totalQuantity;
+  // CRITICAL: TravelEscrow requires checkIn > block.timestamp
+  // If booking for today and it's past midnight UTC, adjust checkIn to be in the future
+  const now = Math.floor(Date.now() / 1000);
+  if (checkIn <= now) {
+    // Set checkIn to now + 1 hour to ensure it's in the future when tx is mined
+    checkIn = now + 3600;
+  }
 
+  const checkOutDate = new Date(params.checkOut);
+  const checkOut = Math.floor(
+    Date.UTC(checkOutDate.getFullYear(), checkOutDate.getMonth(), checkOutDate.getDate()) / 1000
+  );
+
+  // Calculate nights from check-in/check-out
+  const nights = Math.ceil((checkOut - checkIn) / 86400);
+
+  // Calculate subtotal (without platform fee) to determine each room's proportion
+  const subtotal = params.rooms.reduce((sum, room) => {
+    const quantity = room.quantity || 1;
+    return sum + room.pricePerNight * quantity * nights;
+  }, 0);
+
+  // Use each room's individual price, distributed proportionally from the total
+  // params.totalAmount includes the platform fee (5%), so we distribute it proportionally
+  // This ensures: sum of all room prices = totalAmount
   const rooms = params.rooms.map((room) => {
     const quantity = room.quantity || 1;
-    const roomPrice = parseUnits((pricePerUnit * quantity).toFixed(6), 6);
+    // Room's base price (without fee)
+    const roomSubtotal = room.pricePerNight * quantity * nights;
+    // Room's proportion of the total
+    const roomProportion = subtotal > 0 ? roomSubtotal / subtotal : 1 / params.rooms.length;
+    // Room's total price including its share of the platform fee
+    const roomTotalPrice = params.totalAmount * roomProportion;
+    const roomPrice = parseUnits(roomTotalPrice.toFixed(6), 6);
     return {
       tokenId: room.tokenId.toString(),
       quantity,
@@ -482,24 +531,110 @@ export function useBookingConfirmation(): UseBookingConfirmationResult {
 
 /**
  * Handle escrow creation errors
+ * Error selectors:
+ * - 0x2c5211c6 = InvalidAmount() - room not available or price mismatch
+ * - 0xf8618030 = InvalidQuote() - signature validation failed
+ * - 0x8727a7f9 = QuoteExpired() - quote has expired
+ * - 0x2263f4e2 = UnsupportedCurrency() - currency not supported
+ * - 0xe6c4247b = InvalidAddress() - invalid address
+ * - 0xea8e4eb5 = NotAuthorized() - TravelerSBT authorization failed
+ * - 0x8579befe = MustHaveTravelerSBT() - traveler doesn't have SBT
+ * - 0x48f5c3ed = NoAvailableUnits() - no rooms available
+ * - 0x4d5e5fb3 = NotEscrowFactory() - BookingManager permission denied
  */
 function handleEscrowError(escrowError: unknown, params: BookingConfirmationParams): never {
   const err = escrowError as { message?: string; code?: number };
+  const errorMessage = err?.message || "";
 
-  if (err?.message?.includes("User rejected") || err?.code === 4001) {
+  // Log full error for debugging
+  console.error("[Booking Error]", {
+    message: errorMessage,
+    code: err?.code,
+    fullError: escrowError,
+  });
+
+  if (errorMessage.includes("User rejected") || err?.code === 4001) {
     throw new Error(
       "Booking transaction was rejected. Please confirm the transaction to create your booking."
     );
   }
 
-  if (err?.message?.includes("AA23") || err?.message?.includes("reverted")) {
+  // 0x8579befe = MustHaveTravelerSBT() - traveler doesn't have SBT
+  if (errorMessage.includes("0x8579befe") || errorMessage.includes("MustHaveTravelerSBT")) {
+    throw new Error(
+      "You need a Traveler Badge (SBT) to make bookings. " +
+        "Please mint your Traveler Badge from your profile page first."
+    );
+  }
+
+  // 0xea8e4eb5 = NotAuthorized() - TravelerSBT authorization failed
+  if (errorMessage.includes("0xea8e4eb5") || errorMessage.includes("NotAuthorized")) {
+    throw new Error(
+      "Authorization error: The booking system is not properly configured. " +
+        "Please contact support (Error: BookingManager not authorized on TravelerSBT)."
+    );
+  }
+
+  // 0x4d5e5fb3 = NotEscrowFactory() - BookingManager permission denied
+  if (errorMessage.includes("0x4d5e5fb3") || errorMessage.includes("NotEscrowFactory")) {
+    throw new Error(
+      "Configuration error: Booking confirmation failed due to permission issue. " +
+        "Please contact support (Error: NotEscrowFactory)."
+    );
+  }
+
+  // 0x48f5c3ed = NoAvailableUnits() - no rooms available
+  if (errorMessage.includes("0x48f5c3ed") || errorMessage.includes("NoAvailableUnits")) {
+    throw new Error(
+      "No rooms available for your selected dates. " +
+        "All units may be booked. Please try different dates."
+    );
+  }
+
+  // 0x2c5211c6 = InvalidAmount() - room not available or price mismatch
+  if (errorMessage.includes("0x2c5211c6") || errorMessage.includes("InvalidAmount")) {
+    throw new Error(
+      "The room is not available for your selected dates. " +
+        "The host may not have opened availability for this period. " +
+        "Please try different dates or contact the host."
+    );
+  }
+
+  // 0xf8618030 = InvalidQuote() - signature validation failed
+  if (errorMessage.includes("0xf8618030") || errorMessage.includes("InvalidQuote")) {
     throw new Error(
       "Booking signature validation failed. This usually means the backend signing service " +
         "is not configured correctly. Please contact support or try again later."
     );
   }
 
-  if (err?.message?.includes("insufficient") || err?.message?.includes("balance")) {
+  // 0x8727a7f9 = QuoteExpired() - quote has expired
+  if (errorMessage.includes("0x8727a7f9") || errorMessage.includes("QuoteExpired")) {
+    throw new Error("The booking quote has expired. Please try again to get a new quote.");
+  }
+
+  // 0x2263f4e2 = UnsupportedCurrency() - currency not supported
+  if (errorMessage.includes("0x2263f4e2") || errorMessage.includes("UnsupportedCurrency")) {
+    throw new Error(
+      "The selected payment currency is not supported. Please try with USDC or EURC."
+    );
+  }
+
+  // Generic revert handling for account abstraction errors
+  if (errorMessage.includes("AA23") || errorMessage.includes("reverted")) {
+    // Extract any hex error selector for logging
+    const hexMatch = errorMessage.match(/0x[a-fA-F0-9]{8}/);
+    const hexSelector = hexMatch ? hexMatch[0] : "unknown";
+    console.error("[Booking Error] Revert with selector:", hexSelector);
+
+    throw new Error(
+      `The booking transaction was reverted (${hexSelector}). This could be due to: ` +
+        "unavailable dates, missing Traveler Badge, expired quote, or a system configuration issue. " +
+        "Please verify you have a Traveler Badge and try again, or contact support."
+    );
+  }
+
+  if (errorMessage.includes("insufficient") || errorMessage.includes("balance")) {
     throw new Error(
       `Insufficient ${params.paymentToken} balance. ` +
         `Please ensure you have at least ${params.totalAmount} ${params.paymentToken} in your wallet.`

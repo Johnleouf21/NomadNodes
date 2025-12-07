@@ -1,9 +1,11 @@
 "use client";
-/* eslint-disable @typescript-eslint/no-unused-vars */
 
 import * as React from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { useSetBulkAvailability, getStartOfDayTimestamp } from "@/lib/hooks/usePropertyNFT";
+import { useSetBulkAvailability } from "@/lib/hooks/usePropertyNFT";
+import { useUpdateRoomTypeSupply } from "@/lib/hooks/property/usePropertyMutations";
+import { useReadContract } from "wagmi";
+import { CONTRACTS } from "@/lib/contracts";
 import { toast } from "sonner";
 
 // Extracted components and hooks
@@ -33,10 +35,14 @@ export function ProfessionalAvailabilityCalendar({
     dates: Date[];
     availability: number;
   } | null>(null);
+  const [waitingForSupplyUpdate, setWaitingForSupplyUpdate] = React.useState(false);
 
   // Custom hooks
-  const { availabilityData, isLoading, getAvailability, setAvailabilityData } =
-    useCalendarAvailability(tokenId, currentMonth, maxSupply);
+  const { availabilityData, getAvailability, setAvailabilityData } = useCalendarAvailability(
+    tokenId,
+    currentMonth,
+    maxSupply
+  );
 
   const {
     selectedDates,
@@ -50,6 +56,22 @@ export function ProfessionalAvailabilityCalendar({
   } = useDateSelection(currentMonth);
 
   const { setBulkAvailability, isPending, isSuccess, error: txError } = useSetBulkAvailability();
+  const {
+    updateRoomTypeSupply,
+    isPending: isSupplyPending,
+    isSuccess: isSupplySuccess,
+  } = useUpdateRoomTypeSupply();
+
+  // Read current totalSupply from RoomTypeNFT
+  const { data: roomTypeData } = useReadContract({
+    ...CONTRACTS.roomTypeNFT,
+    functionName: "getRoomType",
+    args: [tokenId],
+  });
+
+  const currentTotalSupply = roomTypeData
+    ? Number((roomTypeData as { totalSupply: bigint }).totalSupply)
+    : 0;
 
   // Handle successful transaction
   React.useEffect(() => {
@@ -92,8 +114,34 @@ export function ProfessionalAvailabilityCalendar({
         description: txError.message || "Failed to update availability",
       });
       setPendingUpdate(null);
+      setWaitingForSupplyUpdate(false);
     }
   }, [txError]);
+
+  // Handle successful supply update - automatically trigger availability update
+  React.useEffect(() => {
+    if (isSupplySuccess && waitingForSupplyUpdate && pendingUpdate) {
+      setWaitingForSupplyUpdate(false);
+
+      toast.success("Room supply updated!", {
+        description: "Now setting availability...",
+      });
+
+      // Sort dates to get start and end
+      const sortedDates = [...pendingUpdate.dates].sort((a, b) => a.getTime() - b.getTime());
+      const startDate = sortedDates[0];
+      const endDate = sortedDates[sortedDates.length - 1];
+      const daysDiff =
+        Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+      toast.info("Transaction submitted", {
+        description: `Setting ${pendingUpdate.availability} unit(s) available for ${daysDiff} day(s). Please confirm in your wallet...`,
+      });
+
+      // Now call setBulkAvailability
+      setBulkAvailability(tokenId, pendingUpdate.availability, startDate, endDate);
+    }
+  }, [isSupplySuccess, waitingForSupplyUpdate, pendingUpdate, tokenId, setBulkAvailability]);
 
   // Generate calendar days for current month
   const calendarDays = React.useMemo(() => {
@@ -167,6 +215,17 @@ export function ProfessionalAvailabilityCalendar({
       availability: availabilityInput,
     });
 
+    // First, check if we need to update totalSupply in RoomTypeNFT
+    // This is required for bookings to work correctly
+    if (currentTotalSupply < maxSupply) {
+      toast.info("Updating room supply first...", {
+        description: `Setting total supply to ${maxSupply} units. You'll need to confirm 2 transactions.`,
+      });
+      setWaitingForSupplyUpdate(true);
+      updateRoomTypeSupply(tokenId, BigInt(maxSupply));
+      return;
+    }
+
     // Show info toast
     toast.info("Transaction submitted", {
       description: `Setting ${availabilityInput} unit(s) available for ${daysDiff} day(s). Please confirm in your wallet...`,
@@ -216,7 +275,7 @@ export function ProfessionalAvailabilityCalendar({
           selectedDatesCount={selectedDates.length}
           availabilityInput={availabilityInput}
           maxSupply={maxSupply}
-          isPending={isPending}
+          isPending={isPending || isSupplyPending}
           onAvailabilityChange={setAvailabilityInput}
           onApply={handleApplyAvailability}
           onClear={clearSelection}

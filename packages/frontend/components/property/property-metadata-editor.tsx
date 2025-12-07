@@ -32,7 +32,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { useUpdateProperty } from "@/lib/hooks/usePropertyNFT";
-import { uploadPropertyMetadataToIPFS } from "@/lib/utils/ipfs";
+import { uploadPropertyMetadataToIPFS, clearIPFSCache } from "@/lib/utils/ipfs";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { PropertyMetadata } from "@/lib/hooks/property/types";
 
@@ -74,6 +75,7 @@ export function PropertyMetadataEditor({
   currentMetadataURI,
   onUpdate,
 }: PropertyMetadataEditorProps) {
+  const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = React.useState(false);
   const [expandedSections, setExpandedSections] = React.useState({
     basic: true,
@@ -98,8 +100,22 @@ export function PropertyMetadataEditor({
 
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = React.useState(false);
+  const [newIpfsHash, setNewIpfsHash] = React.useState<string | null>(null);
 
-  const { updateProperty, isPending, isSuccess } = useUpdateProperty();
+  const { updateProperty, isPending, isSuccess, error: txError, reset } = useUpdateProperty();
+
+  // Handle transaction error
+  React.useEffect(() => {
+    if (txError) {
+      toast.dismiss("blockchain-update");
+      toast.error("Blockchain transaction failed", {
+        description: txError.message || "Failed to update property metadata",
+      });
+      setIsSaving(false);
+      setNewIpfsHash(null);
+      reset();
+    }
+  }, [txError, reset]);
 
   // Reset form when currentMetadata changes
   React.useEffect(() => {
@@ -121,15 +137,31 @@ export function PropertyMetadataEditor({
 
   // Handle success
   React.useEffect(() => {
-    if (isSuccess) {
+    if (isSuccess && newIpfsHash) {
+      toast.dismiss("blockchain-update");
+
+      // Clear old IPFS cache
+      if (currentMetadataURI) {
+        clearIPFSCache(currentMetadataURI);
+      }
+      // Clear new IPFS cache to force fresh fetch
+      clearIPFSCache(newIpfsHash);
+
+      // Invalidate React Query caches
+      queryClient.invalidateQueries({ queryKey: ["ipfs"] });
+      queryClient.invalidateQueries({ queryKey: ["property"] });
+      queryClient.invalidateQueries({ queryKey: ["ponderProperties"] });
+
       toast.success("Property metadata updated", {
         description: "Your changes have been saved to the blockchain",
       });
       setIsEditing(false);
       setIsSaving(false);
+      setNewIpfsHash(null);
+      reset(); // Reset the mutation state
       onUpdate?.();
     }
-  }, [isSuccess, onUpdate]);
+  }, [isSuccess, newIpfsHash, currentMetadataURI, queryClient, reset, onUpdate]);
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -207,10 +239,10 @@ export function PropertyMetadataEditor({
 
       // Upload to IPFS
       toast.loading("Uploading metadata to IPFS...", { id: "ipfs-upload" });
-      const newIpfsHash = await uploadPropertyMetadataToIPFS(metadataToUpload);
+      const uploadedIpfsHash = await uploadPropertyMetadataToIPFS(metadataToUpload);
       toast.dismiss("ipfs-upload");
 
-      if (newIpfsHash === "QmPlaceholder") {
+      if (uploadedIpfsHash === "QmPlaceholder") {
         toast.error("IPFS upload failed", {
           description: "Please check your Pinata configuration",
         });
@@ -219,21 +251,30 @@ export function PropertyMetadataEditor({
       }
 
       toast.success("Metadata uploaded to IPFS", {
-        description: `Hash: ${newIpfsHash.slice(0, 10)}...`,
+        description: `Hash: ${uploadedIpfsHash.slice(0, 10)}...`,
       });
 
+      // Store the new hash for cache invalidation on success
+      setNewIpfsHash(uploadedIpfsHash);
+
       // Update property on blockchain
-      updateProperty(propertyId, newIpfsHash);
+      toast.loading("Updating blockchain...", { id: "blockchain-update" });
+      updateProperty(propertyId, uploadedIpfsHash);
     } catch (error) {
       console.error("Failed to save metadata:", error);
       toast.error("Failed to save changes", {
         description: error instanceof Error ? error.message : "Unknown error",
       });
       setIsSaving(false);
+      setNewIpfsHash(null);
     }
   };
 
   const handleCancel = () => {
+    // Dismiss any pending toasts
+    toast.dismiss("blockchain-update");
+    toast.dismiss("ipfs-upload");
+
     setMetadata({
       name: currentMetadata?.name || "",
       description: currentMetadata?.description || "",
@@ -247,7 +288,10 @@ export function PropertyMetadataEditor({
       houseRules: currentMetadata?.houseRules || [],
     });
     setErrors({});
+    setIsSaving(false);
+    setNewIpfsHash(null);
     setIsEditing(false);
+    reset(); // Reset mutation state
   };
 
   const isLoading = isPending || isSaving;

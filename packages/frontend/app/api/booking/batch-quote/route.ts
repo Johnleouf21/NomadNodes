@@ -80,9 +80,13 @@ export async function POST(request: NextRequest) {
 
     // Validate timestamps
     const now = Math.floor(Date.now() / 1000);
-    const todayMidnight = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
+    // Get start of today in UTC (midnight UTC) for date comparison
+    // Since check-in dates are normalized to UTC midnight, we compare against today's UTC midnight
+    const todayUTC = new Date();
+    todayUTC.setUTCHours(0, 0, 0, 0);
+    const todayMidnightUTC = Math.floor(todayUTC.getTime() / 1000);
 
-    if (body.checkIn < todayMidnight) {
+    if (body.checkIn < todayMidnightUTC) {
       return NextResponse.json(
         { error: "Check-in date must be today or in the future" },
         { status: 400 }

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Twitter, Github, Linkedin, Mail } from "lucide-react";
+import { Twitter, Mail } from "lucide-react";
 import { useTranslation } from "@/lib/hooks/useTranslation";
 import { Separator } from "@/components/ui/separator";
 
@@ -11,61 +11,40 @@ export function Footer() {
 
   const footerSections = [
     {
-      title: t("footer.company"),
+      title: "Platform",
       links: [
-        { label: t("footer.about"), href: "/about" },
-        { label: t("footer.careers"), href: "/careers" },
-        { label: t("footer.press"), href: "/press" },
-        { label: t("footer.blog"), href: "/blog" },
-      ],
-    },
-    {
-      title: t("footer.support"),
-      links: [
-        { label: t("footer.help_center"), href: "/help" },
-        { label: t("footer.safety"), href: "/safety" },
-        { label: t("footer.contact"), href: "/contact" },
-        { label: t("footer.community_forum"), href: "/forum" },
-      ],
-    },
-    {
-      title: t("footer.hosts"),
-      links: [
+        { label: t("nav.explore"), href: "/explore" },
         { label: t("footer.host_home"), href: "/host" },
-        { label: t("footer.host_resources"), href: "/host/resources" },
-        { label: t("nav.my_properties"), href: "/properties" },
       ],
     },
     {
       title: t("footer.legal"),
       links: [
-        { label: t("footer.privacy"), href: "/privacy" },
         { label: t("footer.terms"), href: "/terms" },
-        { label: t("footer.cookies"), href: "/cookies" },
+        { label: t("footer.privacy"), href: "/privacy" },
       ],
     },
   ];
 
   const socialLinks = [
-    { icon: Twitter, href: "https://twitter.com/nomadnodes", label: "Twitter" },
-    { icon: Github, href: "https://github.com/nomadnodes", label: "GitHub" },
-    { icon: Linkedin, href: "https://linkedin.com/company/nomadnodes", label: "LinkedIn" },
-    { icon: Mail, href: "mailto:contact@nomadnodes.com", label: "Email" },
+    { icon: Twitter, href: "https://x.com/nomad_nodes", label: "X (Twitter)" },
+    { icon: Mail, href: "mailto:contact@nomadnodes.xyz", label: "Email" },
   ];
 
   return (
     <footer className="bg-background border-t">
-      <div className="container px-4 py-12 md:py-16">
-        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-5">
+      <div className="container px-4 py-10">
+        <div className="grid gap-8 md:grid-cols-4">
           {/* Brand Section */}
-          <div className="lg:col-span-2">
-            <Link href="/" className="mb-4 inline-block">
-              <h3 className="from-primary bg-gradient-to-r to-purple-600 bg-clip-text text-2xl font-bold text-transparent">
-                NomadNodes
+          <div className="md:col-span-2">
+            <Link href="/" className="mb-3 inline-block">
+              <h3 className="font-heading text-foreground text-2xl font-bold tracking-tight">
+                <span className="text-primary">✦</span>Nomad Nodes
+                <span className="text-primary">✦</span>
               </h3>
             </Link>
-            <p className="text-muted-foreground mb-6 max-w-sm text-sm">{t("footer.tagline")}</p>
-            <div className="flex items-center gap-4">
+            <p className="text-muted-foreground mb-4 max-w-sm text-sm">{t("footer.tagline")}</p>
+            <div className="flex items-center gap-3">
               {socialLinks.map((social) => {
                 const Icon = social.icon;
                 return (
@@ -87,8 +66,8 @@ export function Footer() {
           {/* Links Sections */}
           {footerSections.map((section) => (
             <div key={section.title}>
-              <h4 className="mb-4 text-sm font-semibold">{section.title}</h4>
-              <ul className="space-y-3">
+              <h4 className="mb-3 text-sm font-semibold">{section.title}</h4>
+              <ul className="space-y-2">
                 {section.links.map((link) => (
                   <li key={link.label}>
                     <Link
@@ -104,11 +83,11 @@ export function Footer() {
           ))}
         </div>
 
-        <Separator className="my-8" />
+        <Separator className="my-6" />
 
-        <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
-          <p className="text-muted-foreground text-center text-sm">{t("footer.copyright")}</p>
-          <p className="text-muted-foreground text-center text-sm">{t("footer.built_on")}</p>
+        <div className="flex flex-col items-center justify-between gap-3 md:flex-row">
+          <p className="text-muted-foreground text-center text-xs">{t("footer.copyright")}</p>
+          <p className="text-muted-foreground text-center text-xs">{t("footer.built_on")}</p>
         </div>
       </div>
     </footer>

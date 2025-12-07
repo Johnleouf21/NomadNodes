@@ -158,7 +158,7 @@ export function PropertyCheckInQR({
       </CardHeader>
       <CardContent className="space-y-6">
         {/* QR Code Display */}
-        <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed bg-white p-6">
+        <div className="bg-card flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-6">
           <QRCodeSVG id="checkin-qr-code" value={qrData} size={256} level="H" includeMargin />
           <p className="text-muted-foreground mt-4 text-center text-sm">
             Guests scan this code to confirm check-in

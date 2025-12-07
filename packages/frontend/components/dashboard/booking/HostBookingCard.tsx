@@ -62,20 +62,20 @@ const statusConfig: Record<
   },
   Confirmed: {
     label: "Confirmed",
-    color: "text-blue-700 dark:text-blue-400",
-    bgColor: "bg-blue-500/10",
+    color: "text-[#0F4C5C] dark:text-[#1A7A8A]",
+    bgColor: "bg-[#0F4C5C]/10",
     icon: CheckCircle2,
   },
   CheckedIn: {
     label: "Checked In",
-    color: "text-purple-700 dark:text-purple-400",
-    bgColor: "bg-purple-500/10",
+    color: "text-[#E36414] dark:text-[#E36414]",
+    bgColor: "bg-[#E36414]/10",
     icon: LogIn,
   },
   Completed: {
     label: "Completed",
-    color: "text-green-700 dark:text-green-400",
-    bgColor: "bg-green-500/10",
+    color: "text-[#81B29A] dark:text-[#81B29A]",
+    bgColor: "bg-[#81B29A]/10",
     icon: CheckCircle2,
   },
   Cancelled: {
@@ -251,7 +251,7 @@ export function HostBookingCard({
                     size="sm"
                     onClick={onConfirm}
                     disabled={isActionPending}
-                    className="gap-1.5 bg-blue-600 hover:bg-blue-700"
+                    className="gap-1.5 bg-[#0F4C5C] hover:bg-[#0F4C5C]/90"
                   >
                     {isActionPending ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -266,7 +266,7 @@ export function HostBookingCard({
                     size="sm"
                     onClick={onCheckIn}
                     disabled={isActionPending}
-                    className="gap-1.5 bg-purple-600 hover:bg-purple-700"
+                    className="gap-1.5 bg-[#E36414] hover:bg-[#E36414]/90"
                   >
                     {isActionPending ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -281,7 +281,7 @@ export function HostBookingCard({
                     size="sm"
                     onClick={onComplete}
                     disabled={isActionPending}
-                    className="gap-1.5 bg-green-600 hover:bg-green-700"
+                    className="gap-1.5 bg-[#81B29A] hover:bg-[#81B29A]/90"
                   >
                     {isActionPending ? (
                       <Loader2 className="h-4 w-4 animate-spin" />

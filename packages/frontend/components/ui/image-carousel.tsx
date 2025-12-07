@@ -124,7 +124,7 @@ export function ImageCarousel({
               onClick={(e) => goToIndex(e, index)}
               className={cn(
                 "h-1.5 w-1.5 rounded-full transition-all",
-                index === currentIndex ? "w-3 bg-white" : "bg-white/60 hover:bg-white/80"
+                index === currentIndex ? "bg-card w-3" : "bg-card/60 hover:bg-card/80"
               )}
             />
           ))}
@@ -136,7 +136,7 @@ export function ImageCarousel({
 
       {/* Image Counter */}
       {hasMultipleImages && (
-        <div className="absolute right-2 bottom-2 rounded-full bg-black/50 px-2 py-0.5 text-xs text-white backdrop-blur">
+        <div className="bg-foreground/50 text-background absolute right-2 bottom-2 rounded-full px-2 py-0.5 text-xs backdrop-blur">
           {currentIndex + 1}/{images.length}
         </div>
       )}

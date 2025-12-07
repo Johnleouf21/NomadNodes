@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Menu, User, LogOut, Wallet, Send, Plus } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useDisconnect, useBalance } from "wagmi";
@@ -80,13 +81,11 @@ export function Header() {
   };
 
   return (
-    <header className="bg-background/95 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50 w-full border-b backdrop-blur">
+    <header className="bg-background/95 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50 w-full border-b p-4 backdrop-blur">
       <div className="container flex h-16 items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center space-x-2">
-          <span className="from-primary bg-gradient-to-r to-purple-600 bg-clip-text text-2xl font-bold text-transparent">
-            NomadNodes
-          </span>
+          <Image src="/logo.svg" alt="NomadNodes" width={60} height={32} priority />
         </Link>
 
         {/* Desktop Navigation */}

@@ -18,6 +18,24 @@ const ipfsCache = new Map<string, { data: any; timestamp: number }>();
 const IPFS_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 /**
+ * Clear a specific IPFS hash from the cache
+ */
+export function clearIPFSCache(hashOrUrl?: string): void {
+  if (hashOrUrl) {
+    // Clear specific hash
+    ipfsCache.delete(hashOrUrl);
+    // Also try to clear the extracted hash
+    const hash = extractIPFSHash(hashOrUrl);
+    if (hash && hash !== hashOrUrl) {
+      ipfsCache.delete(hash);
+    }
+  } else {
+    // Clear entire cache
+    ipfsCache.clear();
+  }
+}
+
+/**
  * Extract pure IPFS hash from various formats
  */
 function extractIPFSHash(hashOrUrl: string): string | null {

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Syne, Mulish } from "next/font/google";
 import { headers } from "next/headers";
 import { Toaster } from "sonner";
 
@@ -10,14 +10,20 @@ import ContextProvider from "@/context";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Syne for titles - Bold, innovative, "Tech-Couture" feel
+const syne = Syne({
+  variable: "--font-syne",
   subsets: ["latin"],
+  weight: ["700", "800"],
+  display: "swap", // Prevent font blocking
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+// Mulish for body - Rounded, welcoming, easy to read
+const mulish = Mulish({
+  variable: "--font-mulish",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap", // Prevent font blocking
 });
 
 export const metadata: Metadata = {
@@ -56,9 +62,9 @@ export const metadata: Metadata = {
     siteName: "NomadNodes",
     images: [
       {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
+        url: "/android-chrome-512x512.png",
+        width: 512,
+        height: 512,
         alt: "NomadNodes - Decentralized Vacation Rentals",
       },
     ],
@@ -66,12 +72,12 @@ export const metadata: Metadata = {
 
   // Twitter
   twitter: {
-    card: "summary_large_image",
+    card: "summary",
     title: "NomadNodes - Decentralized Vacation Rentals",
     description:
       "Book unique stays powered by blockchain. Transparent, secure, and truly peer-to-peer.",
     creator: "@nomadnodes",
-    images: ["/og-image.png"],
+    images: ["/android-chrome-512x512.png"],
   },
 
   // Icons
@@ -114,23 +120,23 @@ export default async function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${syne.variable} ${mulish.variable} font-sans antialiased`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >
-          <PonderClientProvider>
-            <ContextProvider cookies={cookies}>
+          <ContextProvider cookies={cookies}>
+            <PonderClientProvider>
               <div className="relative flex min-h-screen flex-col">
                 <Header />
                 <main className="flex-1">{children}</main>
                 <Footer />
               </div>
               <Toaster richColors position="top-right" />
-            </ContextProvider>
-          </PonderClientProvider>
+            </PonderClientProvider>
+          </ContextProvider>
         </ThemeProvider>
       </body>
     </html>

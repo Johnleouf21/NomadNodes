@@ -193,7 +193,7 @@ export function PropertyCardPonderWithMetadata({
 
   return (
     <Link href={`/property/${property.propertyId}`}>
-      <Card className="group overflow-hidden transition-all hover:shadow-lg">
+      <Card className="group dark:border-border dark:hover:border-primary dark:hover:ring-primary/30 overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-xl dark:border dark:hover:ring-2">
         {/* Image Carousel */}
         <div className="relative">
           <ImageCarousel
@@ -229,9 +229,9 @@ export function PropertyCardPonderWithMetadata({
           {/* Name */}
           <h3 className="mb-2 line-clamp-1 text-lg font-semibold">{displayName}</h3>
 
-          {/* Description preview */}
+          {/* Description preview - single line */}
           {metadata?.description && (
-            <p className="text-muted-foreground mb-3 line-clamp-2 text-sm">
+            <p className="text-muted-foreground mb-3 line-clamp-1 text-sm">
               {metadata.description}
             </p>
           )}

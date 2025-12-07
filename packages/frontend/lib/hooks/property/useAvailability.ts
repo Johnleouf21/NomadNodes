@@ -210,20 +210,24 @@ export function useGetAvailableUnits(tokenId: bigint | undefined, date: Date | u
 
 /**
  * Helper to get start of day timestamp (normalized to UTC midnight)
+ * Uses LOCAL date components to create UTC midnight timestamp
+ * This ensures Dec 6 in user's timezone becomes Dec 6 00:00:00 UTC
  */
 export function getStartOfDayTimestamp(date: Date): number {
-  const d = new Date(date);
-  d.setUTCHours(0, 0, 0, 0);
-  return Math.floor(d.getTime() / 1000);
+  // Use Date.UTC with local date components to preserve the user's selected date
+  // e.g., Dec 6 00:00 Paris (CET) → Dec 6 00:00:00 UTC (not Dec 5)
+  return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 1000);
 }
 
 /**
  * Helper to get end of day timestamp
+ * Uses LOCAL date components to create UTC end-of-day timestamp
  */
 export function getEndOfDayTimestamp(date: Date): number {
-  const d = new Date(date);
-  d.setUTCHours(23, 59, 59, 999);
-  return Math.floor(d.getTime() / 1000);
+  // Use Date.UTC with local date components + 23:59:59
+  return Math.floor(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999) / 1000
+  );
 }
 
 /**
@@ -316,8 +320,8 @@ export function useCalendarAvailability(
     if (!startDate) return [];
 
     const dates: Date[] = [];
-    const start = new Date(startDate);
-    start.setUTCHours(0, 0, 0, 0);
+    // Create a new date at local midnight for the start date
+    const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
 
     for (let i = 0; i < daysToCheck; i++) {
       const date = new Date(start);

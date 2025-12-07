@@ -144,7 +144,7 @@ export function BookingFlow({
       const timer = setTimeout(() => {
         resetBooking();
         resetBookingConfirmation();
-        router.push("/dashboard/bookings");
+        router.push("/dashboard/traveler");
       }, 2000);
 
       return () => clearTimeout(timer);

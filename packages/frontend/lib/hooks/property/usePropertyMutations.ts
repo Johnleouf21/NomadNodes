@@ -36,21 +36,33 @@ export function useSetPropertyActive() {
 }
 
 /**
- * Hook to update property metadata
- * Note: In the new architecture, property metadata is stored offchain (IPFS).
- * This hook is kept for backwards compatibility but does nothing.
- * @deprecated Use IPFS directly to update metadata
+ * Hook to update property metadata IPFS hash on-chain
  */
 export function useUpdateProperty() {
-  const updateProperty = React.useCallback((_propertyId: bigint, _newIpfsHash: string) => {
-    console.warn("useUpdateProperty is deprecated. Property metadata is stored offchain.");
-  }, []);
+  const { writeContract, data: txHash, isPending, error, reset } = useWriteContract();
+
+  const { isLoading: isTxLoading, isSuccess: isTxSuccess } = useWaitForTransactionReceipt({
+    hash: txHash,
+  });
+
+  const updateProperty = React.useCallback(
+    (propertyId: bigint, newIpfsHash: string) => {
+      writeContract({
+        ...CONTRACTS.propertyRegistry,
+        functionName: "updatePropertyMetadata",
+        args: [propertyId, newIpfsHash],
+      });
+    },
+    [writeContract]
+  );
 
   return {
     updateProperty,
-    isPending: false,
-    isSuccess: false,
-    error: null,
+    isPending: isPending || isTxLoading,
+    isSuccess: isTxSuccess,
+    error,
+    txHash,
+    reset,
   };
 }
 

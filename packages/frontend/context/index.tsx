@@ -31,12 +31,20 @@ if (!projectId) {
   throw new Error("Project ID is not defined");
 }
 
-// Set up metadata
+// Set up metadata for Reown/WalletConnect
+const getBaseUrl = () => {
+  if (typeof window !== "undefined") return window.location.origin;
+  return process.env.NEXT_PUBLIC_APP_URL || "https://nomadnodes.com";
+};
+
+// Production URL for logo (works with Reown modal)
+const LOGO_URL = "https://nomad-nodes-frontend.vercel.app/logo.svg";
+
 const metadata = {
   name: "NomadNodes",
   description: "Decentralized vacation rental platform powered by blockchain",
-  url: typeof window !== "undefined" ? window.location.origin : "https://nomadnodes.com",
-  icons: ["https://nomadnodes.com/logo.png"], // TODO: Update with actual logo URL
+  url: getBaseUrl(),
+  icons: [LOGO_URL],
 };
 
 // Create the modal

@@ -62,11 +62,11 @@ const statusLabels: Record<BookingStatusFilter, string> = {
 };
 
 const statusColors: Record<BookingStatusFilter, string> = {
-  all: "bg-gray-500/10 text-gray-700 dark:text-gray-400",
+  all: "bg-muted text-muted-foreground",
   Pending: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
-  Confirmed: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-  CheckedIn: "bg-purple-500/10 text-purple-700 dark:text-purple-400",
-  Completed: "bg-green-500/10 text-green-700 dark:text-green-400",
+  Confirmed: "bg-[#0F4C5C]/10 text-[#0F4C5C] dark:text-[#1A7A8A]",
+  CheckedIn: "bg-[#E36414]/10 text-[#E36414]",
+  Completed: "bg-[#81B29A]/10 text-[#81B29A]",
   Cancelled: "bg-red-500/10 text-red-700 dark:text-red-400",
 };
 
@@ -202,7 +202,7 @@ export function BookingFiltersToolbar({
             <Badge variant="secondary" className={statusColors[statusFilter]}>
               {statusLabels[statusFilter]}
               <button
-                className="ml-1 rounded-full p-0.5 hover:bg-black/10"
+                className="hover:bg-foreground/10 ml-1 rounded-full p-0.5"
                 onClick={() => onStatusFilterChange("all")}
               >
                 <X className="h-3 w-3" />
@@ -213,7 +213,7 @@ export function BookingFiltersToolbar({
             <Badge variant="secondary">
               Search: "{searchQuery}"
               <button
-                className="ml-1 rounded-full p-0.5 hover:bg-black/10"
+                className="hover:bg-foreground/10 ml-1 rounded-full p-0.5"
                 onClick={() => onSearchChange("")}
               >
                 <X className="h-3 w-3" />
@@ -224,7 +224,7 @@ export function BookingFiltersToolbar({
             <Badge variant="secondary">
               Property: {properties.find((p) => p.id === propertyFilter)?.name || propertyFilter}
               <button
-                className="ml-1 rounded-full p-0.5 hover:bg-black/10"
+                className="hover:bg-foreground/10 ml-1 rounded-full p-0.5"
                 onClick={() => onPropertyFilterChange("all")}
               >
                 <X className="h-3 w-3" />
