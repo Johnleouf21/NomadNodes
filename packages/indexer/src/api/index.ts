@@ -6,19 +6,28 @@ import { client, graphql } from "ponder";
 
 const app = new Hono();
 
-// CORS configuration from environment variable
-// Format: comma-separated list of origins, e.g. "http://localhost:3000,https://nomadnodes.com"
-// If not set, defaults to allowing all origins (for development)
+// CORS configuration - STRICT mode
+// CORS_ALLOWED_ORIGINS must be set, e.g. "http://localhost:3000,https://nomadnodes.com"
+// If not set, no origins are allowed (blocks all cross-origin requests)
 const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
-  ? process.env.CORS_ALLOWED_ORIGINS.split(",").map((o) => o.trim())
-  : ["*"];
+  ? process.env.CORS_ALLOWED_ORIGINS.split(",")
+      .map((o) => o.trim())
+      .filter(Boolean)
+  : [];
+
+if (allowedOrigins.length === 0) {
+  console.warn("⚠️ CORS_ALLOWED_ORIGINS not set - all cross-origin requests will be blocked");
+}
 
 app.use(
   "*",
   cors({
-    origin: allowedOrigins.includes("*")
-      ? "*"
-      : (origin) => (allowedOrigins.includes(origin) ? origin : null),
+    origin: (origin) => {
+      // If no origin header (same-origin request), allow it
+      if (!origin) return origin;
+      // Check if origin is in the allowed list
+      return allowedOrigins.includes(origin) ? origin : null;
+    },
     allowMethods: ["GET", "POST", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
   })
