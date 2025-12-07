@@ -11,6 +11,7 @@ import {
   TrendingUp,
   Clock,
   BarChart3,
+  Wallet,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
@@ -46,7 +47,7 @@ import {
 } from "./booking";
 import { CONTRACTS } from "@/lib/contracts";
 import { toast } from "sonner";
-import { HostAnalytics } from "./analytics";
+import { HostAnalytics, HostRevenue } from "./analytics";
 
 export function HostDashboard() {
   const { t } = useTranslation();
@@ -454,6 +455,10 @@ export function HostDashboard() {
               <BarChart3 className="h-4 w-4" />
               Analytics
             </TabsTrigger>
+            <TabsTrigger value="revenue" className="flex items-center gap-1.5">
+              <Wallet className="h-4 w-4" />
+              Revenue
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="properties">
@@ -582,6 +587,14 @@ export function HostDashboard() {
               bookings={ponderBookings || []}
               properties={allProperties}
               roomTypesMap={roomTypesMap}
+              getPropertyInfo={getPropertyInfo}
+              getRoomTypeInfo={getRoomTypeInfo}
+            />
+          </TabsContent>
+
+          <TabsContent value="revenue">
+            <HostRevenue
+              bookings={ponderBookings || []}
               getPropertyInfo={getPropertyInfo}
               getRoomTypeInfo={getRoomTypeInfo}
             />

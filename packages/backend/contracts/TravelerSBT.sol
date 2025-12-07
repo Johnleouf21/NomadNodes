@@ -141,12 +141,72 @@ contract TravelerSBT is ERC721, Ownable {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Update traveler reputation after a completed stay
+     * @notice Increment booking count when a booking is confirmed
+     * @param traveler Address of the traveler
+     */
+    function incrementBookingCount(address traveler) external {
+        if (!authorizedUpdaters[msg.sender]) revert NotAuthorized();
+
+        uint256 tokenId = walletToTokenId[traveler];
+        if (tokenId == 0) revert NoSBT();
+
+        TravelerProfile storage profile = profiles[tokenId];
+        if (profile.suspended) revert TravelerIsSuspended();
+
+        profile.totalBookings++;
+        profile.lastActivityTimestamp = block.timestamp;
+
+        // Update tier based on new booking count
+        ReputationTier oldTier = profile.tier;
+        profile.tier = _calculateTier(profile);
+
+        if (profile.tier != oldTier) {
+            emit TierUpgraded(traveler, tokenId, oldTier, profile.tier);
+        }
+    }
+
+    /**
+     * @notice Increment completed stays when a booking is completed
+     * @param traveler Address of the traveler
+     */
+    function incrementCompletedStays(address traveler) external {
+        if (!authorizedUpdaters[msg.sender]) revert NotAuthorized();
+
+        uint256 tokenId = walletToTokenId[traveler];
+        if (tokenId == 0) revert NoSBT();
+
+        TravelerProfile storage profile = profiles[tokenId];
+        if (profile.suspended) revert TravelerIsSuspended();
+
+        profile.completedStays++;
+        profile.lastActivityTimestamp = block.timestamp;
+    }
+
+    /**
+     * @notice Record a cancelled booking
+     * @param traveler Address of the traveler
+     */
+    function recordCancellation(address traveler) external {
+        if (!authorizedUpdaters[msg.sender]) revert NotAuthorized();
+
+        uint256 tokenId = walletToTokenId[traveler];
+        if (tokenId == 0) revert NoSBT();
+
+        TravelerProfile storage profile = profiles[tokenId];
+        profile.cancelledBookings++;
+        profile.lastActivityTimestamp = block.timestamp;
+    }
+
+    /**
+     * @notice Update traveler rating after receiving a review from host
      * @param traveler Address of the traveler
      * @param rating Rating given by host (1-5)
-     * @param cancelled Whether the booking was cancelled
      */
-    function updateReputation(address traveler, uint8 rating, bool cancelled) external {
+    function updateReputation(
+        address traveler,
+        uint8 rating,
+        bool /* cancelled - kept for interface compatibility */
+    ) external {
         if (!authorizedUpdaters[msg.sender]) revert NotAuthorized();
         if (rating < 1 || rating > 5) revert InvalidRating();
 
@@ -157,35 +217,27 @@ contract TravelerSBT is ERC721, Ownable {
 
         if (profile.suspended) revert TravelerIsSuspended();
 
-        profile.totalBookings++;
         profile.lastActivityTimestamp = block.timestamp;
 
-        if (cancelled) {
-            profile.cancelledBookings++;
+        // Calculate weighted average rating
+        uint256 oldTotal = profile.totalReviewsReceived;
+        profile.totalReviewsReceived++;
+
+        if (oldTotal == 0) {
+            profile.averageRating = uint256(rating) * 100;
         } else {
-            profile.completedStays++;
-
-            // Calculate weighted average rating (before incrementing totalReviewsReceived)
-            uint256 oldTotal = profile.totalReviewsReceived;
-            profile.totalReviewsReceived++;
-
-            if (oldTotal == 0) {
-                profile.averageRating = uint256(rating) * 100;
-            } else {
-                uint256 totalRatingPoints = profile.averageRating * oldTotal;
-                profile.averageRating = (totalRatingPoints + (uint256(rating) * 100)) / profile.totalReviewsReceived;
-            }
-
-            if (rating >= 4) {
-                profile.positiveReviews++;
-            }
+            uint256 totalRatingPoints = profile.averageRating * oldTotal;
+            profile.averageRating = (totalRatingPoints + (uint256(rating) * 100)) / profile.totalReviewsReceived;
         }
 
-        // Update tier
+        if (rating >= 4) {
+            profile.positiveReviews++;
+        }
+
+        // Update tier based on rating change
         ReputationTier oldTier = profile.tier;
         profile.tier = _calculateTier(profile);
 
-        // Emit tier upgrade event if tier changed
         if (profile.tier != oldTier) {
             emit TierUpgraded(traveler, tokenId, oldTier, profile.tier);
         }

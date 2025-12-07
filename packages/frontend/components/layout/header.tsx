@@ -23,6 +23,7 @@ import {
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { LanguageSwitcher } from "@/components/shared/language-switcher";
 import { TokenBalanceDisplay } from "@/components/shared/token-balance-display";
+import { TokenFaucet } from "@/components/shared/token-faucet";
 import { useTranslation } from "@/lib/hooks/useTranslation";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { cn } from "@/lib/utils";
@@ -118,9 +119,12 @@ export function Header() {
           <LanguageSwitcher />
           <ThemeToggle />
 
-          {/* Token Balance Display - Only show when connected */}
+          {/* Token Faucet & Balance Display - Only show when connected */}
           {isConnected && address && (
-            <TokenBalanceDisplay address={address} variant="compact" className="hidden md:flex" />
+            <>
+              <TokenFaucet address={address} className="hidden md:flex" />
+              <TokenBalanceDisplay address={address} variant="compact" className="hidden md:flex" />
+            </>
           )}
 
           {/* User Menu or Connect Button */}
@@ -275,6 +279,8 @@ export function Header() {
                     </div>
                     {/* Token Balances for Mobile */}
                     <TokenBalanceDisplay address={address} variant="full" showRefresh />
+                    {/* Token Faucet for Mobile */}
+                    <TokenFaucet address={address} variant="full" />
                   </div>
                 )}
 

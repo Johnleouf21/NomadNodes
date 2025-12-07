@@ -469,9 +469,9 @@ export function HostBookingDetailSheet({
               </div>
             </div>
             {booking.status === "Completed" && (
-              <div className="mt-3 flex items-center gap-2 rounded bg-green-500/10 p-2 text-sm text-green-700 dark:text-green-400">
-                <CheckCircle2 className="h-4 w-4" />
-                Payment released to your wallet
+              <div className="mt-3 flex items-center gap-2 rounded bg-yellow-500/10 p-2 text-sm text-yellow-700 dark:text-yellow-400">
+                <Clock className="h-4 w-4" />
+                Funds ready to withdraw in Revenue tab
               </div>
             )}
           </div>

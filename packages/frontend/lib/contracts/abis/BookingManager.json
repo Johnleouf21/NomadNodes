@@ -634,6 +634,19 @@
   },
   {
     "inputs": [],
+    "name": "hostSBT",
+    "outputs": [
+      {
+        "internalType": "contract IHostSBT",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "owner",
     "outputs": [
       {
@@ -749,6 +762,19 @@
       }
     ],
     "name": "setEscrowFactory",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_hostSBT",
+        "type": "address"
+      }
+    ],
+    "name": "setHostSBT",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

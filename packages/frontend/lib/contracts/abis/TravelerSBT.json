@@ -615,6 +615,32 @@
     "inputs": [
       {
         "internalType": "address",
+        "name": "traveler",
+        "type": "address"
+      }
+    ],
+    "name": "incrementBookingCount",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "traveler",
+        "type": "address"
+      }
+    ],
+    "name": "incrementCompletedStays",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
         "name": "owner",
         "type": "address"
       },
@@ -789,6 +815,19 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "traveler",
+        "type": "address"
+      }
+    ],
+    "name": "recordCancellation",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -1025,7 +1064,7 @@
       },
       {
         "internalType": "bool",
-        "name": "cancelled",
+        "name": "",
         "type": "bool"
       }
     ],

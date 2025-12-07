@@ -175,12 +175,82 @@ describe("HostSBT", function () {
     });
   });
 
+  describe("Booking Count Functions", function () {
+    beforeEach(async function () {
+      await hostSBT.mint(host1.address);
+    });
+
+    it("should increment booking received count", async function () {
+      await hostSBT.connect(authorizedUpdater).incrementBookingReceived(host1.address);
+
+      const profile = await hostSBT.getProfile(host1.address);
+      expect(profile.totalBookingsReceived).to.equal(1);
+    });
+
+    it("should increment completed bookings", async function () {
+      await hostSBT.connect(authorizedUpdater).incrementCompletedBooking(host1.address);
+
+      const profile = await hostSBT.getProfile(host1.address);
+      expect(profile.completedBookings).to.equal(1);
+    });
+
+    it("should revert incrementBookingReceived if not authorized", async function () {
+      await expect(
+        hostSBT.connect(host2).incrementBookingReceived(host1.address)
+      ).to.be.revertedWithCustomError(hostSBT, "NotAuthorized");
+    });
+
+    it("should revert incrementBookingReceived if no SBT", async function () {
+      await expect(
+        hostSBT.connect(authorizedUpdater).incrementBookingReceived(host2.address)
+      ).to.be.revertedWithCustomError(hostSBT, "NoSBT");
+    });
+
+    it("should revert incrementBookingReceived if suspended", async function () {
+      await hostSBT.suspendHost(host1.address);
+
+      await expect(
+        hostSBT.connect(authorizedUpdater).incrementBookingReceived(host1.address)
+      ).to.be.revertedWithCustomError(hostSBT, "HostIsSuspended");
+    });
+
+    it("should revert incrementCompletedBooking if not authorized", async function () {
+      await expect(
+        hostSBT.connect(host2).incrementCompletedBooking(host1.address)
+      ).to.be.revertedWithCustomError(hostSBT, "NotAuthorized");
+    });
+
+    it("should revert incrementCompletedBooking if no SBT", async function () {
+      await expect(
+        hostSBT.connect(authorizedUpdater).incrementCompletedBooking(host2.address)
+      ).to.be.revertedWithCustomError(hostSBT, "NoSBT");
+    });
+
+    it("should revert incrementCompletedBooking if suspended", async function () {
+      await hostSBT.suspendHost(host1.address);
+
+      await expect(
+        hostSBT.connect(authorizedUpdater).incrementCompletedBooking(host1.address)
+      ).to.be.revertedWithCustomError(hostSBT, "HostIsSuspended");
+    });
+
+    it("should update tier when booking count changes", async function () {
+      // Add 7 bookings to reach Experienced tier
+      for (let i = 0; i < 7; i++) {
+        await hostSBT.connect(authorizedUpdater).incrementBookingReceived(host1.address);
+      }
+
+      const profile = await hostSBT.getProfile(host1.address);
+      expect(profile.tier).to.equal(1); // Experienced
+    });
+  });
+
   describe("Reputation System", function () {
     beforeEach(async function () {
       await hostSBT.mint(host1.address);
     });
 
-    it("should update reputation after review", async function () {
+    it("should update reputation after review (without incrementing bookings)", async function () {
       const rating = 5; // 5 stars
       const responseTime = 30; // 30 minutes
 
@@ -189,8 +259,9 @@ describe("HostSBT", function () {
       ).to.emit(hostSBT, "ReputationUpdated");
 
       const profile = await hostSBT.getProfile(host1.address);
-      expect(profile.totalBookingsReceived).to.equal(1);
-      expect(profile.completedBookings).to.equal(1);
+      // totalBookingsReceived and completedBookings should NOT be incremented by updateReputation
+      expect(profile.totalBookingsReceived).to.equal(0);
+      expect(profile.completedBookings).to.equal(0);
       expect(profile.totalReviewsReceived).to.equal(1);
       expect(profile.positiveReviews).to.equal(1);
       expect(profile.averageRating).to.equal(500); // 5.00 stars = 500
@@ -228,7 +299,7 @@ describe("HostSBT", function () {
     it("should revert if updating reputation for non-existent SBT", async function () {
       await expect(
         hostSBT.connect(authorizedUpdater).updateReputation(host2.address, 5, 30)
-      ).to.be.revertedWithCustomError(hostSBT, "NoSBT"); // Line 169
+      ).to.be.revertedWithCustomError(hostSBT, "NoSBT");
     });
 
     it("should revert if updating reputation for suspended host", async function () {
@@ -236,7 +307,7 @@ describe("HostSBT", function () {
 
       await expect(
         hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 5, 30)
-      ).to.be.revertedWithCustomError(hostSBT, "HostIsSuspended"); // Line 173
+      ).to.be.revertedWithCustomError(hostSBT, "HostIsSuspended");
     });
 
     it("should count positive reviews (4-5 stars)", async function () {
@@ -261,9 +332,9 @@ describe("HostSBT", function () {
     });
 
     it("should upgrade to Experienced tier", async function () {
-      // Complete 6 bookings
+      // Add 6 bookings received
       for (let i = 0; i < 6; i++) {
-        await hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 5, 30);
+        await hostSBT.connect(authorizedUpdater).incrementBookingReceived(host1.address);
       }
 
       const profile = await hostSBT.getProfile(host1.address);
@@ -271,8 +342,12 @@ describe("HostSBT", function () {
     });
 
     it("should upgrade to Pro tier", async function () {
-      // Complete 21 bookings with avg rating >= 4.0
+      // Add 21 bookings received
       for (let i = 0; i < 21; i++) {
+        await hostSBT.connect(authorizedUpdater).incrementBookingReceived(host1.address);
+      }
+      // Add reviews for avg rating >= 4.0
+      for (let i = 0; i < 5; i++) {
         await hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 5, 30);
       }
 
@@ -282,19 +357,27 @@ describe("HostSBT", function () {
     });
 
     it("should stay Experienced with insufficient rating for Pro", async function () {
-      // Complete 21 bookings but with rating < 4.0
+      // Add 21 bookings received
       for (let i = 0; i < 21; i++) {
+        await hostSBT.connect(authorizedUpdater).incrementBookingReceived(host1.address);
+      }
+      // Add reviews with rating < 4.0
+      for (let i = 0; i < 5; i++) {
         await hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 3, 30);
       }
 
       const profile = await hostSBT.getProfile(host1.address);
-      expect(profile.tier).to.equal(1); // Still Experienced (lines 364-365)
+      expect(profile.tier).to.equal(1); // Still Experienced
       expect(profile.averageRating).to.be.lt(400);
     });
 
     it("should award SuperHost status", async function () {
-      // Complete 50 bookings with avg rating >= 4.7 and response time < 120min
+      // Add 50 bookings received
       for (let i = 0; i < 50; i++) {
+        await hostSBT.connect(authorizedUpdater).incrementBookingReceived(host1.address);
+      }
+      // Add reviews with avg rating >= 4.7 and response time < 120min
+      for (let i = 0; i < 10; i++) {
         await hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 5, 60);
       }
 
@@ -306,8 +389,11 @@ describe("HostSBT", function () {
     });
 
     it("should revoke SuperHost on low rating", async function () {
-      // First get SuperHost
+      // First get SuperHost status
       for (let i = 0; i < 50; i++) {
+        await hostSBT.connect(authorizedUpdater).incrementBookingReceived(host1.address);
+      }
+      for (let i = 0; i < 10; i++) {
         await hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 5, 60);
       }
 
@@ -315,12 +401,12 @@ describe("HostSBT", function () {
       expect(profile.superHost).to.be.true;
 
       // Now add low ratings to drop average below 4.7
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 40; i++) {
         await hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 2, 60);
       }
 
       profile = await hostSBT.getProfile(host1.address);
-      expect(profile.superHost).to.be.false; // SuperHost revoked (lines 216-218)
+      expect(profile.superHost).to.be.false; // SuperHost revoked
     });
   });
 
@@ -354,6 +440,9 @@ describe("HostSBT", function () {
     it("should revoke SuperHost after too many cancellations", async function () {
       // First achieve SuperHost status
       for (let i = 0; i < 50; i++) {
+        await hostSBT.connect(authorizedUpdater).incrementBookingReceived(host1.address);
+      }
+      for (let i = 0; i < 10; i++) {
         await hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 5, 60);
       }
 
@@ -366,7 +455,7 @@ describe("HostSBT", function () {
       await hostSBT.connect(authorizedUpdater).recordCancellation(host1.address);
 
       profile = await hostSBT.getProfile(host1.address);
-      expect(profile.superHost).to.be.false; // SuperHost revoked (lines 240-242)
+      expect(profile.superHost).to.be.false; // SuperHost revoked
       expect(profile.cancellationsByHost).to.equal(3);
     });
 
@@ -520,6 +609,9 @@ describe("HostSBT", function () {
     it("should show SuperHost tier color and name in tokenURI (covers lines 395-397)", async function () {
       // Achieve SuperHost status: 50+ bookings, rating >= 4.7, response time < 120min
       for (let i = 0; i < 50; i++) {
+        await hostSBT.connect(authorizedUpdater).incrementBookingReceived(host1.address);
+      }
+      for (let i = 0; i < 10; i++) {
         await hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 5, 60);
       }
 
@@ -542,6 +634,9 @@ describe("HostSBT", function () {
     it("should show Pro tier color and name in tokenURI (covers lines 398-400)", async function () {
       // Achieve Pro tier: 21+ bookings, rating >= 4.0 (but not SuperHost)
       for (let i = 0; i < 21; i++) {
+        await hostSBT.connect(authorizedUpdater).incrementBookingReceived(host1.address);
+      }
+      for (let i = 0; i < 5; i++) {
         await hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 4, 30);
       }
 
@@ -564,7 +659,7 @@ describe("HostSBT", function () {
     it("should show Experienced tier color and name in tokenURI (covers lines 401-403)", async function () {
       // Achieve Experienced tier: 6+ bookings (but not enough for Pro)
       for (let i = 0; i < 10; i++) {
-        await hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 5, 30);
+        await hostSBT.connect(authorizedUpdater).incrementBookingReceived(host1.address);
       }
 
       const uri = await hostSBT.tokenURI(1);
@@ -660,9 +755,13 @@ describe("HostSBT", function () {
     });
 
     it("should calculate completion rate", async function () {
-      // Complete 10 bookings
+      // Add 10 bookings received
       for (let i = 0; i < 10; i++) {
-        await hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 5, 30);
+        await hostSBT.connect(authorizedUpdater).incrementBookingReceived(host1.address);
+      }
+      // Complete all 10 bookings
+      for (let i = 0; i < 10; i++) {
+        await hostSBT.connect(authorizedUpdater).incrementCompletedBooking(host1.address);
       }
 
       const completionRate = await hostSBT.getCompletionRate(host1.address);

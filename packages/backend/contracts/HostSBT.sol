@@ -139,7 +139,59 @@ contract HostSBT is ERC721, Ownable {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Update host reputation after a completed booking
+     * @notice Increment booking received count when a booking is confirmed
+     * @param host Address of the host
+     */
+    function incrementBookingReceived(address host) external {
+        if (!authorizedUpdaters[msg.sender]) revert NotAuthorized();
+
+        uint256 tokenId = walletToTokenId[host];
+        if (tokenId == 0) revert NoSBT();
+
+        HostProfile storage profile = profiles[tokenId];
+        if (profile.suspended) revert HostIsSuspended();
+
+        profile.totalBookingsReceived++;
+        profile.lastActivityTimestamp = block.timestamp;
+
+        // Update tier based on new booking count
+        ReputationTier oldTier = profile.tier;
+        profile.tier = _calculateTier(profile);
+
+        if (profile.tier != oldTier) {
+            emit TierUpgraded(host, tokenId, oldTier, profile.tier);
+        }
+    }
+
+    /**
+     * @notice Increment completed bookings when a booking is completed
+     * @param host Address of the host
+     */
+    function incrementCompletedBooking(address host) external {
+        if (!authorizedUpdaters[msg.sender]) revert NotAuthorized();
+
+        uint256 tokenId = walletToTokenId[host];
+        if (tokenId == 0) revert NoSBT();
+
+        HostProfile storage profile = profiles[tokenId];
+        if (profile.suspended) revert HostIsSuspended();
+
+        profile.completedBookings++;
+        profile.lastActivityTimestamp = block.timestamp;
+
+        // Check SuperHost status
+        bool wasSuperHost = profile.superHost;
+        profile.superHost = _calculateSuperHost(profile);
+
+        if (profile.superHost && !wasSuperHost) {
+            emit SuperHostAwarded(host, tokenId);
+        } else if (!profile.superHost && wasSuperHost) {
+            emit SuperHostRevoked(host, tokenId);
+        }
+    }
+
+    /**
+     * @notice Update host rating after receiving a review from traveler
      * @param host Address of the host
      * @param rating Rating given by traveler (1-5)
      * @param responseTime Response time in minutes
@@ -155,11 +207,9 @@ contract HostSBT is ERC721, Ownable {
 
         if (profile.suspended) revert HostIsSuspended();
 
-        profile.totalBookingsReceived++;
-        profile.completedBookings++;
         profile.lastActivityTimestamp = block.timestamp;
 
-        // Calculate weighted average rating (before incrementing totalReviewsReceived)
+        // Calculate weighted average rating
         uint256 oldTotal = profile.totalReviewsReceived;
         profile.totalReviewsReceived++;
 
@@ -182,11 +232,10 @@ contract HostSBT is ERC721, Ownable {
                 (profile.averageResponseTime * oldTotal + responseTime) / profile.totalReviewsReceived;
         }
 
-        // Update tier
+        // Update tier based on rating change
         ReputationTier oldTier = profile.tier;
         profile.tier = _calculateTier(profile);
 
-        // Emit tier upgrade event if tier changed
         if (profile.tier != oldTier) {
             emit TierUpgraded(host, tokenId, oldTier, profile.tier);
         }

@@ -77,36 +77,120 @@ describe("TravelerSBT", function () {
     });
   });
 
+  describe("Booking Count Functions", function () {
+    beforeEach(async function () {
+      await travelerSBT.connect(traveler1).mint(traveler1.address);
+    });
+
+    it("should increment booking count", async function () {
+      await travelerSBT.incrementBookingCount(traveler1.address);
+
+      const profile = await travelerSBT.getProfile(traveler1.address);
+      expect(profile.totalBookings).to.equal(1);
+    });
+
+    it("should increment completed stays", async function () {
+      await travelerSBT.incrementCompletedStays(traveler1.address);
+
+      const profile = await travelerSBT.getProfile(traveler1.address);
+      expect(profile.completedStays).to.equal(1);
+    });
+
+    it("should record cancellation", async function () {
+      await travelerSBT.recordCancellation(traveler1.address);
+
+      const profile = await travelerSBT.getProfile(traveler1.address);
+      expect(profile.cancelledBookings).to.equal(1);
+    });
+
+    it("should revert incrementBookingCount if not authorized", async function () {
+      await travelerSBT.setAuthorizedUpdater(owner.address, false);
+
+      await expect(
+        travelerSBT.incrementBookingCount(traveler1.address)
+      ).to.be.revertedWithCustomError(travelerSBT, "NotAuthorized");
+    });
+
+    it("should revert incrementBookingCount if no SBT", async function () {
+      await expect(
+        travelerSBT.incrementBookingCount(traveler2.address)
+      ).to.be.revertedWithCustomError(travelerSBT, "NoSBT");
+    });
+
+    it("should revert incrementBookingCount if suspended", async function () {
+      await travelerSBT.suspendTraveler(traveler1.address);
+
+      await expect(
+        travelerSBT.incrementBookingCount(traveler1.address)
+      ).to.be.revertedWithCustomError(travelerSBT, "TravelerIsSuspended");
+    });
+
+    it("should revert incrementCompletedStays if not authorized", async function () {
+      await travelerSBT.setAuthorizedUpdater(owner.address, false);
+
+      await expect(
+        travelerSBT.incrementCompletedStays(traveler1.address)
+      ).to.be.revertedWithCustomError(travelerSBT, "NotAuthorized");
+    });
+
+    it("should revert incrementCompletedStays if no SBT", async function () {
+      await expect(
+        travelerSBT.incrementCompletedStays(traveler2.address)
+      ).to.be.revertedWithCustomError(travelerSBT, "NoSBT");
+    });
+
+    it("should revert incrementCompletedStays if suspended", async function () {
+      await travelerSBT.suspendTraveler(traveler1.address);
+
+      await expect(
+        travelerSBT.incrementCompletedStays(traveler1.address)
+      ).to.be.revertedWithCustomError(travelerSBT, "TravelerIsSuspended");
+    });
+
+    it("should revert recordCancellation if not authorized", async function () {
+      await travelerSBT.setAuthorizedUpdater(owner.address, false);
+
+      await expect(travelerSBT.recordCancellation(traveler1.address)).to.be.revertedWithCustomError(
+        travelerSBT,
+        "NotAuthorized"
+      );
+    });
+
+    it("should revert recordCancellation if no SBT", async function () {
+      await expect(travelerSBT.recordCancellation(traveler2.address)).to.be.revertedWithCustomError(
+        travelerSBT,
+        "NoSBT"
+      );
+    });
+
+    it("should update tier when booking count changes", async function () {
+      // Add 7 bookings to reach Regular tier
+      for (let i = 0; i < 7; i++) {
+        await travelerSBT.incrementBookingCount(traveler1.address);
+      }
+
+      const profile = await travelerSBT.getProfile(traveler1.address);
+      expect(profile.tier).to.equal(1); // Regular
+    });
+  });
+
   describe("Reputation System", function () {
     beforeEach(async function () {
       await travelerSBT.connect(traveler1).mint(traveler1.address);
     });
 
-    it("should update reputation after positive review", async function () {
+    it("should update rating after review (without incrementing bookings)", async function () {
       const rating = 5;
-      const cancelled = false;
 
-      await expect(travelerSBT.updateReputation(traveler1.address, rating, cancelled))
+      await expect(travelerSBT.updateReputation(traveler1.address, rating, false))
         .to.emit(travelerSBT, "ReputationUpdated")
         .withArgs(traveler1.address, 1, 500, 0); // tokenId, averageRating, tier (Newcomer=0)
 
       const profile = await travelerSBT.getProfile(traveler1.address);
-      expect(profile.totalBookings).to.equal(1);
+      // totalBookings should NOT be incremented by updateReputation anymore
+      expect(profile.totalBookings).to.equal(0);
       expect(profile.totalReviewsReceived).to.equal(1);
       expect(profile.averageRating).to.equal(500); // 5.00 * 100
-      expect(profile.cancelledBookings).to.equal(0);
-    });
-
-    it("should track cancellations", async function () {
-      const rating = 1; // Must provide valid rating
-      const cancelled = true;
-
-      await travelerSBT.updateReputation(traveler1.address, rating, cancelled);
-
-      const profile = await travelerSBT.getProfile(traveler1.address);
-      expect(profile.cancelledBookings).to.equal(1);
-      expect(profile.totalBookings).to.equal(1);
-      expect(profile.completedStays).to.equal(0); // Cancelled, so not completed
     });
 
     it("should calculate weighted average rating", async function () {
@@ -128,17 +212,6 @@ describe("TravelerSBT", function () {
       // 4-5 stars are positive
       expect(profile.positiveReviews).to.equal(2);
       expect(profile.totalReviewsReceived).to.equal(3);
-    });
-
-    it("should not update rating if cancelled", async function () {
-      await travelerSBT.updateReputation(traveler1.address, 5, false);
-      await travelerSBT.updateReputation(traveler1.address, 1, true); // Cancelled
-
-      const profile = await travelerSBT.getProfile(traveler1.address);
-      // Only first review counts for rating
-      expect(profile.averageRating).to.equal(500);
-      expect(profile.totalReviewsReceived).to.equal(1); // Cancellations don't count as reviews
-      expect(profile.cancelledBookings).to.equal(1);
     });
 
     it("should revert if not called by authorized updater", async function () {
@@ -179,8 +252,9 @@ describe("TravelerSBT", function () {
     });
 
     it("should return Regular tier (6-20 bookings)", async function () {
+      // Increment booking count 7 times to reach Regular tier
       for (let i = 0; i < 7; i++) {
-        await travelerSBT.updateReputation(traveler1.address, 5, false);
+        await travelerSBT.incrementBookingCount(traveler1.address);
       }
 
       const profile = await travelerSBT.getProfile(traveler1.address);
@@ -188,7 +262,12 @@ describe("TravelerSBT", function () {
     });
 
     it("should return Trusted tier (21+ bookings, avg >= 4.0)", async function () {
+      // Increment booking count 22 times
       for (let i = 0; i < 22; i++) {
+        await travelerSBT.incrementBookingCount(traveler1.address);
+      }
+      // Add reviews for 4.0+ rating
+      for (let i = 0; i < 5; i++) {
         await travelerSBT.updateReputation(traveler1.address, 5, false);
       }
 
@@ -198,8 +277,12 @@ describe("TravelerSBT", function () {
     });
 
     it("should return Elite tier (51+ bookings, avg >= 4.5)", async function () {
-      // 51 bookings with 5-star rating (avg = 5.0)
+      // 51 bookings
       for (let i = 0; i < 51; i++) {
+        await travelerSBT.incrementBookingCount(traveler1.address);
+      }
+      // Add 5-star reviews for avg = 5.0
+      for (let i = 0; i < 5; i++) {
         await travelerSBT.updateReputation(traveler1.address, 5, false);
       }
 
@@ -210,8 +293,12 @@ describe("TravelerSBT", function () {
     });
 
     it("should not upgrade to Elite without sufficient rating", async function () {
-      // 51 bookings but rating = 4.0 (< 4.5)
+      // 51 bookings
       for (let i = 0; i < 51; i++) {
+        await travelerSBT.incrementBookingCount(traveler1.address);
+      }
+      // Add 4-star reviews (avg = 4.0 < 4.5)
+      for (let i = 0; i < 5; i++) {
         await travelerSBT.updateReputation(traveler1.address, 4, false);
       }
 
@@ -221,8 +308,12 @@ describe("TravelerSBT", function () {
     });
 
     it("should not upgrade to Trusted without sufficient rating", async function () {
-      // 22 bookings but low rating (< 4.0)
+      // 22 bookings
       for (let i = 0; i < 22; i++) {
+        await travelerSBT.incrementBookingCount(traveler1.address);
+      }
+      // Add 3-star reviews (avg = 3.0 < 4.0)
+      for (let i = 0; i < 5; i++) {
         await travelerSBT.updateReputation(traveler1.address, 3, false);
       }
 
@@ -243,9 +334,9 @@ describe("TravelerSBT", function () {
     });
 
     it("should reflect tier in tokenURI", async function () {
-      // Upgrade to Regular tier
+      // Upgrade to Regular tier by incrementing booking count
       for (let i = 0; i < 7; i++) {
-        await travelerSBT.updateReputation(traveler1.address, 5, false);
+        await travelerSBT.incrementBookingCount(traveler1.address);
       }
 
       const tokenURI = await travelerSBT.tokenURI(1);
@@ -256,6 +347,10 @@ describe("TravelerSBT", function () {
     it("should show Elite tier color and name in tokenURI (covers lines 294-296)", async function () {
       // Achieve Elite tier: 51+ bookings, rating >= 4.5
       for (let i = 0; i < 51; i++) {
+        await travelerSBT.incrementBookingCount(traveler1.address);
+      }
+      // Add 5-star reviews
+      for (let i = 0; i < 5; i++) {
         await travelerSBT.updateReputation(traveler1.address, 5, false);
       }
 
@@ -278,6 +373,10 @@ describe("TravelerSBT", function () {
     it("should show Trusted tier color and name in tokenURI (covers lines 297-299)", async function () {
       // Achieve Trusted tier: 21+ bookings, rating >= 4.0
       for (let i = 0; i < 22; i++) {
+        await travelerSBT.incrementBookingCount(traveler1.address);
+      }
+      // Add 4-star reviews for rating >= 4.0
+      for (let i = 0; i < 5; i++) {
         await travelerSBT.updateReputation(traveler1.address, 4, false);
       }
 
@@ -300,7 +399,7 @@ describe("TravelerSBT", function () {
     it("should show Regular tier color and name in tokenURI (covers lines 300-302)", async function () {
       // Achieve Regular tier: 6+ bookings
       for (let i = 0; i < 7; i++) {
-        await travelerSBT.updateReputation(traveler1.address, 5, false);
+        await travelerSBT.incrementBookingCount(traveler1.address);
       }
 
       const uri = await travelerSBT.tokenURI(1);
@@ -486,11 +585,16 @@ describe("TravelerSBT", function () {
     it("should calculate success rate", async function () {
       await travelerSBT.connect(traveler1).mint(traveler1.address);
 
-      // 3 completed, 1 cancelled
-      await travelerSBT.updateReputation(traveler1.address, 5, false);
-      await travelerSBT.updateReputation(traveler1.address, 5, false);
-      await travelerSBT.updateReputation(traveler1.address, 5, false);
-      await travelerSBT.updateReputation(traveler1.address, 1, true);
+      // 4 bookings total
+      for (let i = 0; i < 4; i++) {
+        await travelerSBT.incrementBookingCount(traveler1.address);
+      }
+      // 3 completed
+      for (let i = 0; i < 3; i++) {
+        await travelerSBT.incrementCompletedStays(traveler1.address);
+      }
+      // 1 cancelled
+      await travelerSBT.recordCancellation(traveler1.address);
 
       const successRate = await travelerSBT.getSuccessRate(traveler1.address);
       // 3/4 = 75% = 7500 basis points
@@ -518,12 +622,16 @@ describe("TravelerSBT", function () {
     });
 
     it("should track completed stays vs cancelled bookings", async function () {
-      // 2 completed bookings
-      await travelerSBT.updateReputation(traveler1.address, 5, false);
-      await travelerSBT.updateReputation(traveler1.address, 5, false);
+      // 3 bookings total
+      for (let i = 0; i < 3; i++) {
+        await travelerSBT.incrementBookingCount(traveler1.address);
+      }
+      // 2 completed
+      await travelerSBT.incrementCompletedStays(traveler1.address);
+      await travelerSBT.incrementCompletedStays(traveler1.address);
 
       // 1 cancellation
-      await travelerSBT.updateReputation(traveler1.address, 1, true);
+      await travelerSBT.recordCancellation(traveler1.address);
 
       const profile = await travelerSBT.getProfile(traveler1.address);
       expect(profile.totalBookings).to.equal(3);

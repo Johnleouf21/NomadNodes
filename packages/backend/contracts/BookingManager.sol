@@ -6,6 +6,7 @@ import "./interfaces/IPropertyRegistry.sol";
 import "./interfaces/IRoomTypeNFT.sol";
 import "./interfaces/IAvailabilityManager.sol";
 import "./interfaces/ITravelerSBT.sol";
+import "./interfaces/IHostSBT.sol";
 import "./libraries/PropertyTypes.sol";
 
 /**
@@ -22,6 +23,7 @@ contract BookingManager is Ownable {
     IRoomTypeNFT public roomTypeNFT;
     IAvailabilityManager public availabilityManager;
     ITravelerSBT public travelerSBT;
+    IHostSBT public hostSBT;
     address public escrowFactory;
     address public reviewRegistry;
     address public propertyNFTAdapter;
@@ -177,6 +179,16 @@ contract BookingManager is Ownable {
 
         booking.status = PropertyTypes.BookingStatus.Confirmed;
 
+        // Update SBT stats - increment booking counts
+        travelerSBT.incrementBookingCount(booking.traveler);
+
+        // Get host address and increment their booking count
+        (uint256 propertyId, ) = roomTypeNFT.decodeTokenId(tokenId);
+        address host = propertyRegistry.propertyOwner(propertyId);
+        if (address(hostSBT) != address(0)) {
+            hostSBT.incrementBookingReceived(host);
+        }
+
         emit BookingConfirmed(tokenId, bookingIndex);
     }
 
@@ -222,6 +234,14 @@ contract BookingManager is Ownable {
         if (booking.status != PropertyTypes.BookingStatus.CheckedIn) revert InvalidBookingStatus();
 
         booking.status = PropertyTypes.BookingStatus.Completed;
+
+        // Update SBT stats - increment completed counts
+        travelerSBT.incrementCompletedStays(booking.traveler);
+
+        address host = propertyRegistry.propertyOwner(propertyId);
+        if (address(hostSBT) != address(0)) {
+            hostSBT.incrementCompletedBooking(host);
+        }
 
         emit BookingCompleted(tokenId, bookingIndex);
     }
@@ -277,6 +297,20 @@ contract BookingManager is Ownable {
                 booking.checkOutDate,
                 true
             );
+        }
+
+        // Record cancellation in SBTs if booking was already confirmed
+        // (we don't record cancellation of pending bookings since totalBookings wasn't incremented yet)
+        if (oldStatus == PropertyTypes.BookingStatus.Confirmed || oldStatus == PropertyTypes.BookingStatus.CheckedIn) {
+            travelerSBT.recordCancellation(booking.traveler);
+
+            address host = propertyRegistry.propertyOwner(propertyId);
+            if (address(hostSBT) != address(0)) {
+                // Record host cancellation only if host cancelled (not if traveler cancelled)
+                if (isOwner && !isTraveler) {
+                    hostSBT.recordCancellation(host);
+                }
+            }
         }
 
         emit BookingCancelled(tokenId, bookingIndex);
@@ -412,5 +446,10 @@ contract BookingManager is Ownable {
     function setPropertyNFTAdapter(address _propertyNFTAdapter) external onlyOwner {
         if (_propertyNFTAdapter == address(0)) revert InvalidAddress();
         propertyNFTAdapter = _propertyNFTAdapter;
+    }
+
+    function setHostSBT(address _hostSBT) external onlyOwner {
+        if (_hostSBT == address(0)) revert InvalidAddress();
+        hostSBT = IHostSBT(_hostSBT);
     }
 }

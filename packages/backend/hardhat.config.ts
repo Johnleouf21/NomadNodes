@@ -42,6 +42,8 @@ const config: HardhatUserConfig = {
       chainType: "l1",
       url: configVariable("SEPOLIA_RPC_URL"),
       accounts: [configVariable("SEPOLIA_PRIVATE_KEY")],
+      // Higher gas price for faster confirmation
+      gasPrice: 30_000_000_000, // 30 gwei
     },
     base: {
       type: "http",

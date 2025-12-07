@@ -9,5 +9,8 @@ interface ITravelerSBT {
     function hasSBT(address wallet) external view returns (bool);
     function walletToTokenId(address wallet) external view returns (uint256);
     function linkBooking(address traveler, uint256 tokenId, uint256 bookingIndex) external;
+    function incrementBookingCount(address traveler) external;
+    function incrementCompletedStays(address traveler) external;
+    function recordCancellation(address traveler) external;
     function updateReputation(address traveler, uint8 rating, bool cancelled) external;
 }

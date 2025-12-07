@@ -10,5 +10,8 @@ interface IHostSBT {
     function hasSBT(address wallet) external view returns (bool);
     function linkProperty(address host, uint256 propertyId) external;
     function unlinkProperty(address host, uint256 propertyId) external;
+    function incrementBookingReceived(address host) external;
+    function incrementCompletedBooking(address host) external;
+    function recordCancellation(address host) external;
     function updateReputation(address host, uint8 rating, uint256 responseTime) external;
 }
