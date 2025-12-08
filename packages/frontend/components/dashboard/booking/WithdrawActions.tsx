@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { formatUnits } from "viem";
 import { toast } from "sonner";
+import { useInvalidateQueries } from "@/hooks/useInvalidateQueries";
 
 const ESCROW_ABI = [
   {
@@ -98,6 +99,8 @@ interface WithdrawActionsProps {
 }
 
 export function WithdrawActions({ escrowAddress, onSuccess }: WithdrawActionsProps) {
+  const { invalidateEscrows } = useInvalidateQueries();
+
   // Read escrow data
   const { data: escrowStatus } = useReadContract({
     address: escrowAddress as `0x${string}`,
@@ -183,19 +186,23 @@ export function WithdrawActions({ escrowAddress, onSuccess }: WithdrawActionsPro
   const canWithdraw = isCompleted && !isWithdrawn && hostPreference === PaymentPreference.CRYPTO;
   const hasFunds = escrowBalance && escrowBalance > BigInt(0);
 
-  // Success effects
+  // Success effects with cache invalidation
   React.useEffect(() => {
     if (isPrefSuccess) {
       toast.success("Payment preference set to crypto!");
+      // Invalidate cache to refresh UI
+      invalidateEscrows(2000);
     }
-  }, [isPrefSuccess]);
+  }, [isPrefSuccess, invalidateEscrows]);
 
   React.useEffect(() => {
     if (isWithdrawSuccess) {
       toast.success("Funds withdrawn successfully!");
       onSuccess?.();
+      // Invalidate cache to refresh UI
+      invalidateEscrows(3000);
     }
-  }, [isWithdrawSuccess, onSuccess]);
+  }, [isWithdrawSuccess, onSuccess, invalidateEscrows]);
 
   const handleSetCryptoPreference = () => {
     setPreference({

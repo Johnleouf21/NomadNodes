@@ -74,6 +74,7 @@ interface HostBookingDetailSheetProps {
   onCheckIn?: () => void;
   onComplete?: () => void;
   onCancel?: () => void;
+  onReviewClick?: () => void;
   isActionPending?: boolean;
 }
 
@@ -204,6 +205,7 @@ export function HostBookingDetailSheet({
   onCheckIn,
   onComplete,
   onCancel,
+  onReviewClick,
   isActionPending = false,
 }: HostBookingDetailSheetProps) {
   const router = useRouter();
@@ -695,6 +697,14 @@ export function HostBookingDetailSheet({
               <MessageSquare className="mr-2 h-4 w-4" />
               Message Guest
             </Button>
+
+            {/* Review Button for Completed bookings */}
+            {booking.status === "Completed" && onReviewClick && (
+              <Button className="w-full" variant="outline" onClick={onReviewClick}>
+                <MessageSquare className="mr-2 h-4 w-4" />
+                Review Guest
+              </Button>
+            )}
 
             {/* Cancel Button */}
             {canCancel && onCancel && (

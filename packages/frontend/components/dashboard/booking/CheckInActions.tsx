@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { toast } from "sonner";
+import { useInvalidateQueries } from "@/hooks/useInvalidateQueries";
 
 const ESCROW_ABI = [
   {
@@ -53,6 +54,8 @@ export function CheckInActions({
   isTraveler,
   onSuccess,
 }: CheckInActionsProps) {
+  const { invalidateAfterBooking } = useInvalidateQueries();
+
   // Read escrow data
   const { data: escrowStatus } = useReadContract({
     address: escrowAddress as `0x${string}`,
@@ -118,20 +121,24 @@ export function CheckInActions({
   const timeUntilTravelerDeadline = Math.max(0, travelerWindowEnd - now);
   const timeUntilHostWindow = Math.max(0, hostWindowStart - now);
 
-  // Success effects
+  // Success effects with cache invalidation
   React.useEffect(() => {
     if (isConfirmSuccess) {
       toast.success("Stay confirmed! Funds released to host.");
       onSuccess?.();
+      // Invalidate cache to refresh UI
+      invalidateAfterBooking(3000);
     }
-  }, [isConfirmSuccess, onSuccess]);
+  }, [isConfirmSuccess, onSuccess, invalidateAfterBooking]);
 
   React.useEffect(() => {
     if (isAutoReleaseSuccess) {
       toast.success("Funds automatically released to host.");
       onSuccess?.();
+      // Invalidate cache to refresh UI
+      invalidateAfterBooking(3000);
     }
-  }, [isAutoReleaseSuccess, onSuccess]);
+  }, [isAutoReleaseSuccess, onSuccess, invalidateAfterBooking]);
 
   const handleConfirmStay = () => {
     confirmStay({

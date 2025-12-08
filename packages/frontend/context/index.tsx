@@ -9,7 +9,8 @@ import { type ReactNode } from "react";
 import { cookieToInitialState, WagmiProvider, type Config } from "wagmi";
 
 // Set up queryClient with optimized defaults
-const queryClient = new QueryClient({
+// Exported for manual cache invalidation after transactions
+export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       // Don't refetch on window focus by default - reduces unnecessary requests

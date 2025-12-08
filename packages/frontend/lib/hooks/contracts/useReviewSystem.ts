@@ -3,9 +3,107 @@
  * Covers ReviewRegistry and ReviewValidator
  */
 
-import { useReadContract, useWriteContract, useWatchContractEvent } from "wagmi";
+import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { CONTRACTS } from "@/lib/contracts";
 import type { Address } from "viem";
+
+// ===== ReviewValidator Types =====
+
+export interface PendingReview {
+  reviewId: bigint;
+  escrowId: bigint;
+  propertyId: bigint;
+  bookingIndex: bigint;
+  reviewer: Address;
+  reviewee: Address;
+  rating: number;
+  ipfsCommentHash: string;
+  submittedAt: bigint;
+  status: number; // 0=Pending, 1=Approved, 2=Rejected, 3=Published
+  moderationNote: string;
+  moderator: Address;
+  travelerToHost: boolean;
+}
+
+// ===== Helper: Find escrowId from escrowAddress =====
+
+/**
+ * Hook to find escrowId from escrowAddress by iterating through user's escrows
+ */
+export function useFindEscrowId(
+  userAddress: Address | undefined,
+  escrowAddress: Address | undefined
+) {
+  // Get all escrow IDs for the user
+  const { data: userEscrowIds } = useReadContract({
+    ...CONTRACTS.escrowRegistry,
+    functionName: "getUserEscrows",
+    args: userAddress ? [userAddress] : undefined,
+    query: {
+      enabled: !!userAddress && !!escrowAddress,
+    },
+  });
+
+  // For now, return the escrowIds array - the component will need to resolve
+  // We can't easily do multicall in hooks, so we return the IDs
+  return {
+    escrowIds: userEscrowIds as bigint[] | undefined,
+  };
+}
+
+// ===== ReviewValidator Hooks =====
+
+/**
+ * Check if auto-approve is enabled
+ */
+export function useAutoApproveEnabled() {
+  return useReadContract({
+    ...CONTRACTS.reviewValidator,
+    functionName: "autoApproveEnabled",
+  });
+}
+
+/**
+ * Get a pending review by ID
+ */
+export function useGetPendingReview(reviewId: bigint | undefined) {
+  return useReadContract({
+    ...CONTRACTS.reviewValidator,
+    functionName: "getReview",
+    args: reviewId !== undefined ? [reviewId] : undefined,
+    query: {
+      enabled: reviewId !== undefined,
+    },
+  });
+}
+
+/**
+ * Check if escrow was already reviewed
+ */
+export function useEscrowAlreadyReviewed(escrowId: bigint | undefined) {
+  return useReadContract({
+    ...CONTRACTS.reviewValidator,
+    functionName: "escrowAlreadyReviewed",
+    args: escrowId !== undefined ? [escrowId] : undefined,
+    query: {
+      enabled: escrowId !== undefined,
+    },
+  });
+}
+
+/**
+ * Get escrow address from escrowId
+ */
+export function useGetEscrowAddress(escrowId: bigint | undefined) {
+  return useReadContract({
+    ...CONTRACTS.escrowRegistry,
+    functionName: "escrows",
+    args: escrowId !== undefined ? [escrowId] : undefined,
+    query: {
+      enabled: escrowId !== undefined,
+    },
+  });
+}
 
 // ===== ReviewRegistry Hooks =====
 
@@ -33,99 +131,68 @@ export function useGetUserReviews(user: Address) {
   });
 }
 
-export function useGetHostReviews(host: Address) {
-  return useReadContract({
-    ...CONTRACTS.reviewRegistry,
-    functionName: "getHostReviews",
-    args: [host],
-  });
+// ===== Submit Review Hook =====
+
+interface SubmitReviewArgs {
+  escrowId: bigint;
+  propertyId: bigint;
+  bookingIndex: bigint;
+  reviewee: Address;
+  rating: number;
+  ipfsCommentHash: string;
+  travelerToHost: boolean;
 }
 
-export function useCanReview(bookingId: bigint, reviewer: Address) {
-  return useReadContract({
-    ...CONTRACTS.reviewRegistry,
-    functionName: "canReview",
-    args: [bookingId, reviewer],
-  });
-}
-
-export function useHasReviewed(bookingId: bigint, reviewer: Address) {
-  return useReadContract({
-    ...CONTRACTS.reviewRegistry,
-    functionName: "hasReviewed",
-    args: [bookingId, reviewer],
-  });
-}
-
-// ===== ReviewValidator Hooks =====
-
-export function useValidateReview(
-  propertyId: bigint,
-  rating: number,
-  comment: string,
-  reviewer: Address
-) {
-  return useReadContract({
-    ...CONTRACTS.reviewValidator,
-    functionName: "validateReview",
-    args: [propertyId, rating, comment, reviewer],
-  });
-}
-
-export function useCanReviewProperty(bookingId: bigint, reviewer: Address) {
-  return useReadContract({
-    ...CONTRACTS.reviewValidator,
-    functionName: "canReviewProperty",
-    args: [bookingId, reviewer],
-  });
-}
-
-// Write Hooks
 export function useSubmitReview() {
-  return useWriteContract();
+  const { writeContract, data: hash, isPending, error } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  const submitReview = (args: SubmitReviewArgs) => {
+    writeContract({
+      ...CONTRACTS.reviewValidator,
+      functionName: "submitReview",
+      args: [
+        args.escrowId,
+        args.propertyId,
+        args.bookingIndex,
+        args.reviewee,
+        args.rating,
+        args.ipfsCommentHash,
+        args.travelerToHost,
+      ],
+    });
+  };
+
+  return {
+    submitReview,
+    hash,
+    isPending,
+    isConfirming,
+    isSuccess,
+    error,
+  };
 }
 
-export function useReportReview() {
-  return useWriteContract();
-}
+// ===== Publish Review Hook (for approved reviews) =====
 
-export function useRemoveReview() {
-  return useWriteContract();
-}
+export function usePublishReview() {
+  const { writeContract, data: hash, isPending, error } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
-// Event Hooks
-export function useWatchReviewSubmitted(
-  onLogs: (logs: any[]) => void,
-  options?: { enabled?: boolean }
-) {
-  useWatchContractEvent({
-    ...CONTRACTS.reviewRegistry,
-    eventName: "ReviewSubmitted",
-    onLogs,
-    ...options,
-  });
-}
+  const publishReview = (reviewId: bigint) => {
+    writeContract({
+      ...CONTRACTS.reviewValidator,
+      functionName: "publishReview",
+      args: [reviewId],
+    });
+  };
 
-export function useWatchReviewReported(
-  onLogs: (logs: any[]) => void,
-  options?: { enabled?: boolean }
-) {
-  useWatchContractEvent({
-    ...CONTRACTS.reviewRegistry,
-    eventName: "ReviewReported",
-    onLogs,
-    ...options,
-  });
-}
-
-export function useWatchReviewRemoved(
-  onLogs: (logs: any[]) => void,
-  options?: { enabled?: boolean }
-) {
-  useWatchContractEvent({
-    ...CONTRACTS.reviewRegistry,
-    eventName: "ReviewRemoved",
-    onLogs,
-    ...options,
-  });
+  return {
+    publishReview,
+    hash,
+    isPending,
+    isConfirming,
+    isSuccess,
+    error,
+  };
 }

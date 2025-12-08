@@ -48,6 +48,8 @@ import {
 import { CONTRACTS } from "@/lib/contracts";
 import { toast } from "sonner";
 import { HostAnalytics, HostRevenue } from "./analytics";
+import { ReviewSubmissionForm, type ReviewableBooking } from "@/components/review";
+import type { Address } from "viem";
 
 // Escrow ABI for autoReleaseToHost
 const ESCROW_ABI = [
@@ -76,6 +78,7 @@ export function HostDashboard() {
   const [selectedBooking, setSelectedBooking] = React.useState<PonderBooking | null>(null);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = React.useState(false);
   const [cancelBooking, setCancelBooking] = React.useState<PonderBooking | null>(null);
+  const [isReviewModalOpen, setIsReviewModalOpen] = React.useState(false);
 
   // Action state
   const [pendingAction, setPendingAction] = React.useState<string | null>(null);
@@ -421,6 +424,15 @@ export function HostDashboard() {
     setCancelBooking(booking);
   }, []);
 
+  const handleReviewClick = React.useCallback(() => {
+    if (selectedBooking) {
+      // Don't close the sheet immediately - the review modal will handle the transition
+      setIsReviewModalOpen(true);
+      // Close the sheet after a small delay to ensure the booking data is passed
+      setTimeout(() => setIsDetailSheetOpen(false), 100);
+    }
+  }, [selectedBooking]);
+
   // Calculate enhanced stats
   const totalProperties = hostProperties?.length || 0;
   const pendingBookings = bookingCounts.Pending;
@@ -667,7 +679,8 @@ export function HostDashboard() {
           open={isDetailSheetOpen}
           onOpenChange={(open) => {
             setIsDetailSheetOpen(open);
-            if (!open) setSelectedBooking(null);
+            // Only clear selectedBooking if we're not transitioning to review modal
+            if (!open && !isReviewModalOpen) setSelectedBooking(null);
           }}
           onCheckIn={
             selectedBooking?.status === "Confirmed"
@@ -687,6 +700,7 @@ export function HostDashboard() {
                 }
               : undefined
           }
+          onReviewClick={selectedBooking?.status === "Completed" ? handleReviewClick : undefined}
           isActionPending={
             selectedBooking
               ? pendingAction === selectedBooking.id && (isWritePending || isTxLoading)
@@ -723,6 +737,43 @@ export function HostDashboard() {
             setCancelBooking(null);
             setTimeout(() => refetchBookings(), 2000);
           }}
+        />
+
+        {/* Review Modal - Host reviewing Traveler */}
+        <ReviewSubmissionForm
+          booking={
+            selectedBooking && selectedBooking.escrowAddress && address
+              ? {
+                  id: selectedBooking.id,
+                  propertyId: selectedBooking.propertyId,
+                  propertyName: getPropertyInfo(selectedBooking).name,
+                  roomName: getRoomTypeInfo(selectedBooking).name,
+                  tokenId: selectedBooking.tokenId,
+                  bookingIndex: selectedBooking.bookingIndex,
+                  checkOut: new Date(Number(selectedBooking.checkOutDate) * 1000),
+                  location:
+                    allProperties?.find(
+                      (p: PropertyWithMetadata) =>
+                        p.propertyId.toString() === selectedBooking.propertyId
+                    )?.metadata?.location || "",
+                  image: getPropertyInfo(selectedBooking).imageUrl,
+                  escrowAddress: selectedBooking.escrowAddress,
+                  hostAddress: address as Address,
+                  travelerAddress: selectedBooking.traveler as Address,
+                }
+              : null
+          }
+          open={isReviewModalOpen}
+          onOpenChange={(open) => {
+            setIsReviewModalOpen(open);
+            // Clear selectedBooking when review modal closes
+            if (!open) setSelectedBooking(null);
+          }}
+          onSuccess={() => {
+            refetchBookings();
+            setSelectedBooking(null);
+          }}
+          isTravelerReview={false}
         />
       </div>
     </ProtectedRoute>

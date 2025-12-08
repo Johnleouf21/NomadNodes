@@ -19,6 +19,7 @@ import { useReadContracts, useWriteContract, useWaitForTransactionReceipt } from
 import { formatUnits } from "viem";
 import { toast } from "sonner";
 import type { PonderBooking } from "@/hooks/usePonderBookings";
+import { useInvalidateQueries } from "@/hooks/useInvalidateQueries";
 
 const ESCROW_ABI = [
   {
@@ -136,6 +137,7 @@ interface EscrowInfo {
 export function HostRevenue({ bookings, getPropertyInfo, getRoomTypeInfo }: HostRevenueProps) {
   const [withdrawingEscrow, setWithdrawingEscrow] = React.useState<string | null>(null);
   const [releasingEscrow, setReleasingEscrow] = React.useState<string | null>(null);
+  const { invalidateEscrows } = useInvalidateQueries();
 
   // Filter bookings with escrow addresses where funds may be available
   // Include both CheckedIn (escrow may be completed) and Completed bookings
@@ -294,26 +296,32 @@ export function HostRevenue({ bookings, getPropertyInfo, getRoomTypeInfo }: Host
     hash: prefHash,
   });
 
-  // Success effects
+  // Success effects with cache invalidation
   React.useEffect(() => {
     if (isWithdrawSuccess) {
       toast.success("Funds withdrawn successfully!");
       setWithdrawingEscrow(null);
+      // Invalidate cache to refresh UI
+      invalidateEscrows(3000);
     }
-  }, [isWithdrawSuccess]);
+  }, [isWithdrawSuccess, invalidateEscrows]);
 
   React.useEffect(() => {
     if (isReleaseSuccess) {
       toast.success("Funds released! You can now withdraw.");
       setReleasingEscrow(null);
+      // Invalidate cache to refresh UI
+      invalidateEscrows(3000);
     }
-  }, [isReleaseSuccess]);
+  }, [isReleaseSuccess, invalidateEscrows]);
 
   React.useEffect(() => {
     if (isPrefSuccess) {
       toast.success("Payment preference set to crypto!");
+      // Invalidate cache to refresh UI
+      invalidateEscrows(2000);
     }
-  }, [isPrefSuccess]);
+  }, [isPrefSuccess, invalidateEscrows]);
 
   const handleWithdraw = (escrowAddress: string) => {
     setWithdrawingEscrow(escrowAddress);

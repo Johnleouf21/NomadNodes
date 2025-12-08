@@ -22,6 +22,7 @@ import { useAuth } from "@/lib/hooks/useAuth";
 import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { toast } from "sonner";
 import { CONTRACTS } from "@/lib/contracts";
+import { useInvalidateQueries } from "@/hooks/useInvalidateQueries";
 
 const ESCROW_ABI = [
   {
@@ -84,6 +85,7 @@ export function CheckInScanner() {
   const [matchedBooking, setMatchedBooking] = React.useState<MatchedBooking | null>(null);
   const [selectedBookingId, setSelectedBookingId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const { invalidateAfterBooking } = useInvalidateQueries();
 
   // Fetch traveler's bookings
   const { bookings, refetch } = usePonderBookings({
@@ -243,8 +245,10 @@ export function CheckInScanner() {
       toast.success("Check-in complete! Enjoy your stay.");
       handleReset();
       refetch();
+      // Invalidate cache to refresh UI across the app
+      invalidateAfterBooking(3000);
     }
-  }, [isCheckInSuccess, refetch]);
+  }, [isCheckInSuccess, refetch, invalidateAfterBooking]);
 
   // Handle escrow transaction error
   React.useEffect(() => {

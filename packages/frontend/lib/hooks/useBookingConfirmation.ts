@@ -207,24 +207,35 @@ async function getBatchQuote(params: BookingConfirmationParams): Promise<BatchBo
     return sum + room.pricePerNight * quantity * nights;
   }, 0);
 
-  // Use each room's individual price, distributed proportionally from the total
-  // params.totalAmount includes the platform fee (5%), so we distribute it proportionally
-  // This ensures: sum of all room prices = totalAmount
-  const rooms = params.rooms.map((room) => {
+  // IMPORTANT: Expand rooms with quantity > 1 into separate entries
+  // Each room unit needs its own booking and escrow in the contract
+  // e.g., { tokenId: X, quantity: 3 } becomes 3 separate entries with quantity: 1
+  const expandedRooms: { tokenId: string; quantity: number; price: string }[] = [];
+
+  // Calculate the total number of room units for proportion calculation
+  const totalUnits = params.rooms.reduce((sum, room) => sum + (room.quantity || 1), 0);
+
+  for (const room of params.rooms) {
     const quantity = room.quantity || 1;
-    // Room's base price (without fee)
-    const roomSubtotal = room.pricePerNight * quantity * nights;
-    // Room's proportion of the total
-    const roomProportion = subtotal > 0 ? roomSubtotal / subtotal : 1 / params.rooms.length;
-    // Room's total price including its share of the platform fee
-    const roomTotalPrice = params.totalAmount * roomProportion;
-    const roomPrice = parseUnits(roomTotalPrice.toFixed(6), 6);
-    return {
-      tokenId: room.tokenId.toString(),
-      quantity,
-      price: roomPrice.toString(),
-    };
-  });
+    // Room's base price per unit (without fee)
+    const roomSubtotalPerUnit = room.pricePerNight * nights;
+    // Room's proportion of the total (per unit)
+    const roomProportionPerUnit = subtotal > 0 ? roomSubtotalPerUnit / subtotal : 1 / totalUnits;
+    // Room's total price per unit including its share of the platform fee
+    const roomTotalPricePerUnit = params.totalAmount * roomProportionPerUnit;
+    const roomPricePerUnit = parseUnits(roomTotalPricePerUnit.toFixed(6), 6);
+
+    // Create separate entry for each unit of this room type
+    for (let i = 0; i < quantity; i++) {
+      expandedRooms.push({
+        tokenId: room.tokenId.toString(),
+        quantity: 1, // Each entry represents 1 room unit
+        price: roomPricePerUnit.toString(),
+      });
+    }
+  }
+
+  const rooms = expandedRooms;
 
   const totalPrice = parseUnits(params.totalAmount.toFixed(6), 6);
 
@@ -307,7 +318,10 @@ export function useBookingConfirmation(): UseBookingConfirmationResult {
           await new Promise((resolve) => setTimeout(resolve, 1000));
 
           const mockTxHash = `0x${"0".repeat(62)}01` as `0x${string}`;
-          const mockEscrowAddresses = params.rooms.map(
+          // Calculate total room units (accounting for quantity)
+          const totalRoomUnits = params.rooms.reduce((sum, room) => sum + (room.quantity || 1), 0);
+          const mockEscrowAddresses = Array.from(
+            { length: totalRoomUnits },
             (_, i) => `0x${"0".repeat(38)}${String(i + 1).padStart(2, "0")}` as `0x${string}`
           );
 
@@ -323,7 +337,11 @@ export function useBookingConfirmation(): UseBookingConfirmationResult {
         }
 
         // Determine if this is a single or batch booking
-        const isBatchBooking = params.rooms.length > 1;
+        // Use batch flow when:
+        // 1. Multiple room types are selected, OR
+        // 2. Any room type has quantity > 1 (to create separate bookings per unit)
+        const hasMultipleUnits = params.rooms.some((room) => (room.quantity || 1) > 1);
+        const isBatchBooking = params.rooms.length > 1 || hasMultipleUnits;
 
         const tokenAddress =
           params.paymentToken === "USDC" ? CONTRACT_ADDRESSES.usdc : CONTRACT_ADDRESSES.eurc;

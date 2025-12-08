@@ -264,6 +264,56 @@ export async function uploadRoomTypeMetadataToIPFS(roomType: RoomTypeData): Prom
 }
 
 /**
+ * Upload review comment to IPFS
+ */
+export interface ReviewComment {
+  comment: string;
+  timestamp: number;
+  version: string;
+}
+
+export async function uploadReviewToIPFS(comment: string): Promise<string> {
+  const pinataJWT = process.env.NEXT_PUBLIC_PINATA_JWT;
+
+  if (!pinataJWT) {
+    console.warn("PINATA_JWT not configured, using placeholder");
+    return "QmPlaceholder";
+  }
+
+  const reviewData: ReviewComment = {
+    comment,
+    timestamp: Date.now(),
+    version: "1.0",
+  };
+
+  try {
+    const response = await fetch("https://api.pinata.cloud/pinning/pinJSONToIPFS", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${pinataJWT}`,
+      },
+      body: JSON.stringify({
+        pinataContent: reviewData,
+        pinataMetadata: {
+          name: `review-${Date.now()}`,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Pinata upload failed: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.IpfsHash;
+  } catch (error) {
+    console.error("Failed to upload review to IPFS:", error);
+    throw error;
+  }
+}
+
+/**
  * Format IPFS hash for display
  */
 export function formatIPFSHash(hash: string): string {

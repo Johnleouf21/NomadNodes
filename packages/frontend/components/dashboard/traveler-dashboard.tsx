@@ -40,7 +40,9 @@ import { usePonderReviews, renderStars } from "@/hooks/usePonderReviews";
 import { getIPFSUrl, fetchFromIPFS } from "@/lib/utils/ipfs";
 import { useQuery } from "@tanstack/react-query";
 import { BookingDetailSheet, CancelBookingModal, RoomDetailModal } from "./booking";
+import { ReviewSubmissionForm, type ReviewableBooking } from "@/components/review";
 import type { RoomTypeData } from "@/lib/hooks/property/types";
+import type { Address } from "viem";
 
 interface BookingSummary {
   id: string;
@@ -49,6 +51,7 @@ interface BookingSummary {
   roomTypeId: string;
   roomName: string;
   tokenId: string;
+  bookingIndex: string;
   location: string;
   checkIn: Date;
   checkOut: Date;
@@ -59,6 +62,8 @@ interface BookingSummary {
   ponderStatus: PonderBooking["status"];
   image: string;
   escrowAddress: string | null;
+  hostAddress: Address | null;
+  travelerAddress: Address;
 }
 
 interface RoomTypeInfo {
@@ -146,6 +151,7 @@ export function TravelerDashboard() {
   const [detailSheetOpen, setDetailSheetOpen] = React.useState(false);
   const [cancelModalOpen, setCancelModalOpen] = React.useState(false);
   const [roomModalOpen, setRoomModalOpen] = React.useState(false);
+  const [reviewModalOpen, setReviewModalOpen] = React.useState(false);
 
   // Fetch traveler profile from Ponder
   const { traveler, loading: loadingTraveler } = usePonderTraveler({
@@ -233,6 +239,7 @@ export function TravelerDashboard() {
         roomTypeId: booking.roomTypeId,
         roomName,
         tokenId: booking.tokenId,
+        bookingIndex: booking.bookingIndex,
         location:
           metadata?.city && metadata?.country
             ? `${metadata.city}, ${metadata.country}`
@@ -246,6 +253,8 @@ export function TravelerDashboard() {
         ponderStatus: booking.status,
         image: imageUrl,
         escrowAddress: booking.escrowAddress,
+        hostAddress: (property?.host as Address) || null,
+        travelerAddress: booking.traveler as Address,
       };
     });
   }, [ponderBookings, allProperties, roomTypesMap]);
@@ -272,7 +281,8 @@ export function TravelerDashboard() {
 
   const handleReviewClick = () => {
     if (selectedBooking) {
-      router.push(`/review/${selectedBooking.propertyId}?bookingId=${selectedBooking.id}`);
+      setDetailSheetOpen(false);
+      setReviewModalOpen(true);
     }
   };
 
@@ -599,6 +609,34 @@ export function TravelerDashboard() {
           propertyName={selectedBooking?.propertyName || ""}
           open={roomModalOpen}
           onOpenChange={setRoomModalOpen}
+        />
+
+        {/* Review Form Modal */}
+        <ReviewSubmissionForm
+          booking={
+            selectedBooking && selectedBooking.escrowAddress && selectedBooking.hostAddress
+              ? {
+                  id: selectedBooking.id,
+                  propertyId: selectedBooking.propertyId,
+                  propertyName: selectedBooking.propertyName,
+                  roomName: selectedBooking.roomName,
+                  tokenId: selectedBooking.tokenId,
+                  bookingIndex: selectedBooking.bookingIndex,
+                  checkOut: selectedBooking.checkOut,
+                  location: selectedBooking.location,
+                  image: selectedBooking.image,
+                  escrowAddress: selectedBooking.escrowAddress,
+                  hostAddress: selectedBooking.hostAddress,
+                  travelerAddress: selectedBooking.travelerAddress,
+                }
+              : null
+          }
+          open={reviewModalOpen}
+          onOpenChange={setReviewModalOpen}
+          onSuccess={() => {
+            refetchBookings();
+          }}
+          isTravelerReview={true}
         />
       </div>
     </ProtectedRoute>

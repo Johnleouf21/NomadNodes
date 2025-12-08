@@ -18,6 +18,7 @@ import { useBookingStore, BookingStep } from "@/lib/store/useBookingStore";
 
 // Hooks
 import { useBookingConfirmation } from "@/lib/hooks/useBookingConfirmation";
+import { useInvalidateQueries } from "@/hooks/useInvalidateQueries";
 
 interface BookingFlowProps {
   tokenId: bigint;
@@ -65,6 +66,7 @@ export function BookingFlow({
     isProcessing,
     setIsProcessing,
   } = useBookingStore();
+  const { invalidateAfterBooking } = useInvalidateQueries();
 
   // Booking confirmation hook
   const {
@@ -137,9 +139,12 @@ export function BookingFlow({
     }
   }, [bookingStatus, bookingError, escrowAddress]);
 
-  // Handle booking success
+  // Handle booking success with cache invalidation
   React.useEffect(() => {
     if (bookingStatus === "success" || bookingStatus === "dev-mode-success") {
+      // Invalidate cache to refresh UI across the app
+      invalidateAfterBooking(3000);
+
       // Wait a bit then redirect
       const timer = setTimeout(() => {
         resetBooking();
@@ -149,7 +154,7 @@ export function BookingFlow({
 
       return () => clearTimeout(timer);
     }
-  }, [bookingStatus, resetBooking, resetBookingConfirmation, router]);
+  }, [bookingStatus, resetBooking, resetBookingConfirmation, router, invalidateAfterBooking]);
 
   // Calculate progress
   const progress = React.useMemo(() => {

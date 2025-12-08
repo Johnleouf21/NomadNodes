@@ -43,6 +43,7 @@ interface BookingDetailSheetProps {
     roomTypeId: string;
     roomName: string;
     tokenId: string;
+    bookingIndex?: string;
     location: string;
     checkIn: Date;
     checkOut: Date;
@@ -53,6 +54,8 @@ interface BookingDetailSheetProps {
     ponderStatus: PonderBooking["status"];
     image: string;
     escrowAddress: string | null;
+    hostAddress?: string | null;
+    travelerAddress?: string;
   } | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;

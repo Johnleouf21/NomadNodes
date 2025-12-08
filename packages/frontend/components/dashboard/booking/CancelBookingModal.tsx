@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { toast } from "sonner";
+import { useInvalidateQueries } from "@/hooks/useInvalidateQueries";
 
 // TravelEscrow ABI (only the functions we need)
 const ESCROW_ABI = [
@@ -91,6 +92,7 @@ export function CancelBookingModal({
   onSuccess,
 }: CancelBookingModalProps) {
   const [confirmed, setConfirmed] = React.useState(false);
+  const { invalidateAfterBooking } = useInvalidateQueries();
 
   // Read refund percentage from escrow
   const { data: refundPercentage, isLoading: loadingPercentage } = useReadContract({
@@ -162,7 +164,7 @@ export function CancelBookingModal({
   // Currency label
   const currencyLabel = booking?.currency === "EUR" ? "EURC" : "USDC";
 
-  // Handle success
+  // Handle success with cache invalidation
   React.useEffect(() => {
     if (isSuccess) {
       toast.success("Booking cancelled successfully", {
@@ -170,8 +172,10 @@ export function CancelBookingModal({
       });
       onSuccess?.();
       onOpenChange(false);
+      // Invalidate cache to refresh UI across the app
+      invalidateAfterBooking(3000);
     }
-  }, [isSuccess, yourRefund, onSuccess, onOpenChange, currencyLabel]);
+  }, [isSuccess, yourRefund, onSuccess, onOpenChange, currencyLabel, invalidateAfterBooking]);
 
   // Handle error
   React.useEffect(() => {
