@@ -17,6 +17,7 @@
     "deploy:local": "pnpm compile && hardhat run scripts/deploy.ts",
     "deploy:sepolia": "pnpm compile && hardhat run scripts/deploy.ts --network sepolia",
     "deploy:base": "pnpm compile && hardhat run scripts/deploy.ts --network base",
+    "redeploy:review-validator": "pnpm compile && hardhat run scripts/redeploy-review-validator.ts --network sepolia",
     "verify:sepolia": "hardhat verify --network sepolia",
     "verify:base": "hardhat verify --network base",
     "lint": "eslint . --ext .ts",
