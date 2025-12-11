@@ -1,4 +1,5 @@
 import { ponder } from "ponder:registry";
+import { eq } from "drizzle-orm";
 import {
   property,
   roomType,
@@ -474,6 +475,31 @@ ponder.on("ReviewRegistry:ReviewPublished", async ({ event, context }) => {
     totalReviewsReceived: row.totalReviewsReceived + 1n,
     lastActiveAt: timestamp,
   }));
+
+  // Update traveler/host totalReviewsReceived
+  // Check if reviewee is a traveler (by wallet address)
+  const existingTravelers = await db.sql
+    .select()
+    .from(traveler)
+    .where(eq(traveler.wallet, reviewee))
+    .limit(1);
+  if (existingTravelers.length > 0) {
+    await db.update(traveler, { id: existingTravelers[0].id }).set((row) => ({
+      totalReviewsReceived: row.totalReviewsReceived + 1n,
+      lastActivityAt: timestamp,
+      updatedAt: timestamp,
+    }));
+  }
+
+  // Check if reviewee is a host (by wallet address)
+  const existingHosts = await db.sql.select().from(host).where(eq(host.wallet, reviewee)).limit(1);
+  if (existingHosts.length > 0) {
+    await db.update(host, { id: existingHosts[0].id }).set((row) => ({
+      totalReviewsReceived: row.totalReviewsReceived + 1n,
+      lastActivityAt: timestamp,
+      updatedAt: timestamp,
+    }));
+  }
 
   // Update global stats
   await db.update(globalStats, { id: "global" }).set((row) => ({
