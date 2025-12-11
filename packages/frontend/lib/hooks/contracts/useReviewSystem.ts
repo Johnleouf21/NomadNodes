@@ -78,13 +78,29 @@ export function useGetPendingReview(reviewId: bigint | undefined) {
 }
 
 /**
- * Check if escrow was already reviewed
+ * Check if escrow was already reviewed (DEPRECATED - use useHasReviewed instead)
  */
 export function useEscrowAlreadyReviewed(escrowId: bigint | undefined) {
   return useReadContract({
     ...CONTRACTS.reviewValidator,
     functionName: "escrowAlreadyReviewed",
     args: escrowId !== undefined ? [escrowId] : undefined,
+    query: {
+      enabled: escrowId !== undefined,
+    },
+  });
+}
+
+/**
+ * Check if a review has been submitted for a specific direction
+ * @param escrowId The escrow ID
+ * @param travelerToHost true to check if traveler reviewed, false to check if host reviewed
+ */
+export function useHasReviewed(escrowId: bigint | undefined, travelerToHost: boolean) {
+  return useReadContract({
+    ...CONTRACTS.reviewValidator,
+    functionName: "hasReviewed",
+    args: escrowId !== undefined ? [escrowId, travelerToHost] : undefined,
     query: {
       enabled: escrowId !== undefined,
     },
@@ -148,19 +164,41 @@ export function useSubmitReview() {
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
   const submitReview = (args: SubmitReviewArgs) => {
-    writeContract({
-      ...CONTRACTS.reviewValidator,
-      functionName: "submitReview",
-      args: [
-        args.escrowId,
-        args.propertyId,
-        args.bookingIndex,
-        args.reviewee,
-        args.rating,
-        args.ipfsCommentHash,
-        args.travelerToHost,
-      ],
+    console.log("useSubmitReview: calling writeContract with args:", {
+      escrowId: args.escrowId.toString(),
+      propertyId: args.propertyId.toString(),
+      bookingIndex: args.bookingIndex.toString(),
+      reviewee: args.reviewee,
+      rating: args.rating,
+      ipfsCommentHash: args.ipfsCommentHash,
+      travelerToHost: args.travelerToHost,
     });
+
+    writeContract(
+      {
+        ...CONTRACTS.reviewValidator,
+        functionName: "submitReview",
+        args: [
+          args.escrowId,
+          args.propertyId,
+          args.bookingIndex,
+          args.reviewee,
+          args.rating,
+          args.ipfsCommentHash,
+          args.travelerToHost,
+        ],
+        // Explicit gas limit to avoid estimation issues
+        gas: BigInt(500_000),
+      },
+      {
+        onSuccess: (data) => {
+          console.log("useSubmitReview: writeContract onSuccess, hash:", data);
+        },
+        onError: (err) => {
+          console.error("useSubmitReview: writeContract onError:", err);
+        },
+      }
+    );
   };
 
   return {

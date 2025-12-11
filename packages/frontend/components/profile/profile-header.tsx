@@ -1,52 +1,142 @@
 "use client";
 
 import { useAuth } from "@/lib/hooks/useAuth";
-import { useTranslation } from "@/lib/hooks/useTranslation";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Edit, MapPin, Calendar, Shield } from "lucide-react";
+import {
+  Calendar,
+  Shield,
+  Star,
+  DollarSign,
+  Home,
+  Plane,
+  Crown,
+  Activity,
+  Loader2,
+} from "lucide-react";
 import { formatAddress } from "@/lib/utils";
 import { useTravelerSBTData, useHostSBTData, getTierName } from "@/lib/hooks/useSBTProfile";
+import { useFullUserProfile, useTravelerProfile, useHostProfile } from "@/lib/hooks/useUserProfile";
 
 export function ProfileHeader() {
-  const { t } = useTranslation();
   const { address, hasTravelerSBT, hasHostSBT, role } = useAuth();
 
-  const travelerData = useTravelerSBTData(address);
-  const hostData = useHostSBTData(address);
+  const travelerSBTData = useTravelerSBTData(address);
+  const hostSBTData = useHostSBTData(address);
+  const { bookings, properties, isLoading } = useFullUserProfile(address);
+  const { data: travelerProfile } = useTravelerProfile(address);
+  const { data: hostProfile } = useHostProfile(address);
 
-  // Get member since date from the earliest SBT
+  // Calculate total spent (from completed bookings)
+  const totalSpent = bookings
+    .filter((b) => b.status === "Completed")
+    .reduce((sum, b) => sum + Number(b.totalPrice) / 1e6, 0);
+
+  // Get member since date from the earliest SBT or activity
   const getMemberSince = () => {
-    const dates = [];
-    if (travelerData.profile?.memberSince) {
-      dates.push(Number(travelerData.profile.memberSince));
+    const dates: number[] = [];
+
+    // Check SBT memberSince (primary source)
+    if (travelerSBTData.profile?.memberSince) {
+      const ts = Number(travelerSBTData.profile.memberSince);
+      if (ts > 0) dates.push(ts);
     }
-    if (hostData.profile?.memberSince) {
-      dates.push(Number(hostData.profile.memberSince));
+    if (hostSBTData.profile?.memberSince) {
+      const ts = Number(hostSBTData.profile.memberSince);
+      if (ts > 0) dates.push(ts);
     }
-    if (dates.length === 0) return "Recently joined";
+
+    // Check Ponder profile data
+    if (travelerProfile?.memberSince) {
+      const ts = Number(travelerProfile.memberSince);
+      if (ts > 0) dates.push(ts);
+    }
+    if (hostProfile?.memberSince) {
+      const ts = Number(hostProfile.memberSince);
+      if (ts > 0) dates.push(ts);
+    }
+
+    // Fallback: check earliest booking or property creation
+    if (dates.length === 0) {
+      bookings.forEach((b) => {
+        if (b.createdAt) {
+          const ts = Number(b.createdAt);
+          if (ts > 0) dates.push(ts);
+        }
+      });
+      properties.forEach((p) => {
+        if (p.createdAt) {
+          const ts = Number(p.createdAt);
+          if (ts > 0) dates.push(ts);
+        }
+      });
+    }
+
+    if (dates.length === 0) return null;
 
     const earliestDate = new Date(Math.min(...dates) * 1000);
     return `Member since ${earliestDate.toLocaleDateString("en-US", { month: "short", year: "numeric" })}`;
   };
 
+  // Get last activity
+  const getLastActivity = () => {
+    const dates = [];
+    if (travelerProfile?.lastActivityAt) {
+      dates.push(Number(travelerProfile.lastActivityAt));
+    }
+    if (hostProfile?.lastActivityAt) {
+      dates.push(Number(hostProfile.lastActivityAt));
+    }
+    if (dates.length === 0) return null;
+
+    const latestDate = new Date(Math.max(...dates) * 1000);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - latestDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return "Active today";
+    if (diffDays === 1) return "Active yesterday";
+    if (diffDays < 7) return `Active ${diffDays} days ago`;
+    if (diffDays < 30)
+      return `Active ${Math.floor(diffDays / 7)} week${Math.floor(diffDays / 7) !== 1 ? "s" : ""} ago`;
+    return `Active ${Math.floor(diffDays / 30)} month${Math.floor(diffDays / 30) !== 1 ? "s" : ""} ago`;
+  };
+
+  // Get average rating
+  const getAverageRating = () => {
+    if (travelerProfile?.averageRating) {
+      return Number(travelerProfile.averageRating) / 100;
+    }
+    if (hostProfile?.averageRating) {
+      return Number(hostProfile.averageRating) / 100;
+    }
+    if (travelerSBTData.profile?.averageRating) {
+      return Number(travelerSBTData.profile.averageRating) / 100;
+    }
+    if (hostSBTData.profile?.averageRating) {
+      return Number(hostSBTData.profile.averageRating) / 100;
+    }
+    return null;
+  };
+
   // Get tier badge
   const getTierBadge = () => {
-    if (hasTravelerSBT && travelerData.profile) {
-      const tierName = getTierName(travelerData.profile.tier, true);
+    if (hasTravelerSBT && travelerSBTData.profile) {
+      const tierName = getTierName(travelerSBTData.profile.tier, true);
       return (
-        <Badge variant="outline" className="text-xs">
+        <Badge variant="outline" className="gap-1 text-xs">
+          <Plane className="h-3 w-3" />
           {tierName}
         </Badge>
       );
     }
-    if (hasHostSBT && hostData.profile) {
-      const tierName = getTierName(hostData.profile.tier, false);
+    if (hasHostSBT && hostSBTData.profile) {
+      const tierName = getTierName(hostSBTData.profile.tier, false);
       return (
-        <Badge variant="outline" className="text-xs">
-          {tierName} {hostData.profile.superHost && "⭐"}
+        <Badge variant="outline" className="gap-1 text-xs">
+          <Home className="h-3 w-3" />
+          {tierName}
+          {hostSBTData.profile.superHost && <Crown className="ml-1 h-3 w-3 text-yellow-500" />}
         </Badge>
       );
     }
@@ -93,6 +183,12 @@ export function ProfileHeader() {
     return null;
   };
 
+  const avgRating = getAverageRating();
+  const lastActivity = getLastActivity();
+  const memberSince = getMemberSince();
+  const completedBookings = bookings.filter((b) => b.status === "Completed").length;
+  const activeProperties = properties.filter((p) => p.isActive).length;
+
   return (
     <Card className="overflow-hidden">
       {/* Cover Image */}
@@ -108,7 +204,7 @@ export function ProfileHeader() {
         </div>
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-2">
+          <div className="space-y-3">
             {/* Address & Role */}
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-bold">
@@ -118,30 +214,75 @@ export function ProfileHeader() {
               {getTierBadge()}
             </div>
 
+            {/* Rating */}
+            {avgRating !== null && avgRating > 0 && (
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Star
+                    key={star}
+                    className={`h-4 w-4 ${
+                      star <= Math.round(avgRating)
+                        ? "fill-yellow-400 text-yellow-400"
+                        : "text-gray-300"
+                    }`}
+                  />
+                ))}
+                <span className="ml-1 text-sm font-medium">{avgRating.toFixed(1)}</span>
+              </div>
+            )}
+
             {/* Metadata */}
             <div className="text-muted-foreground flex flex-wrap items-center gap-4 text-sm">
-              <div className="flex items-center gap-1">
-                <Calendar className="h-4 w-4" />
-                <span>{getMemberSince()}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <MapPin className="h-4 w-4" />
-                <span>Location not set</span>
-              </div>
+              {memberSince && (
+                <div className="flex items-center gap-1">
+                  <Calendar className="h-4 w-4" />
+                  <span>{memberSince}</span>
+                </div>
+              )}
+              {lastActivity && (
+                <div className="flex items-center gap-1">
+                  <Activity className="h-4 w-4" />
+                  <span>{lastActivity}</span>
+                </div>
+              )}
             </div>
 
-            {/* Bio */}
-            <p className="text-muted-foreground max-w-2xl text-sm">
-              Welcome to my NomadNodes profile! Exploring the world one decentralized booking at a
-              time.
-            </p>
+            {/* Stats Summary */}
+            {isLoading ? (
+              <div className="flex items-center gap-2 text-sm">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-muted-foreground">Loading stats...</span>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-4 text-sm">
+                {hasTravelerSBT && completedBookings > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <Plane className="text-muted-foreground h-4 w-4" />
+                    <span className="font-medium">{completedBookings}</span>
+                    <span className="text-muted-foreground">
+                      trip{completedBookings !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                )}
+                {hasHostSBT && activeProperties > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <Home className="text-muted-foreground h-4 w-4" />
+                    <span className="font-medium">{activeProperties}</span>
+                    <span className="text-muted-foreground">
+                      propert{activeProperties !== 1 ? "ies" : "y"}
+                    </span>
+                  </div>
+                )}
+                {hasTravelerSBT && totalSpent > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <DollarSign className="text-muted-foreground h-4 w-4" />
+                    <span className="font-medium">${totalSpent.toLocaleString()}</span>
+                    <span className="text-muted-foreground">spent</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-
-          {/* Edit Button */}
-          <Button variant="outline" size="sm">
-            <Edit className="mr-2 h-4 w-4" />
-            {t("profile.edit")}
-          </Button>
         </div>
       </div>
     </Card>

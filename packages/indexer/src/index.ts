@@ -1,5 +1,4 @@
 import { ponder } from "ponder:registry";
-import { eq } from "drizzle-orm";
 import {
   property,
   roomType,
@@ -476,30 +475,8 @@ ponder.on("ReviewRegistry:ReviewPublished", async ({ event, context }) => {
     lastActiveAt: timestamp,
   }));
 
-  // Update traveler/host totalReviewsReceived
-  // Check if reviewee is a traveler (by wallet address)
-  const existingTravelers = await db.sql
-    .select()
-    .from(traveler)
-    .where(eq(traveler.wallet, reviewee))
-    .limit(1);
-  if (existingTravelers.length > 0) {
-    await db.update(traveler, { id: existingTravelers[0].id }).set((row) => ({
-      totalReviewsReceived: row.totalReviewsReceived + 1n,
-      lastActivityAt: timestamp,
-      updatedAt: timestamp,
-    }));
-  }
-
-  // Check if reviewee is a host (by wallet address)
-  const existingHosts = await db.sql.select().from(host).where(eq(host.wallet, reviewee)).limit(1);
-  if (existingHosts.length > 0) {
-    await db.update(host, { id: existingHosts[0].id }).set((row) => ({
-      totalReviewsReceived: row.totalReviewsReceived + 1n,
-      lastActivityAt: timestamp,
-      updatedAt: timestamp,
-    }));
-  }
+  // Note: traveler/host totalReviewsReceived is updated via the SBT ReputationUpdated events
+  // which are emitted when ReviewRegistry.publishReview() calls hostSBT/travelerSBT.updateReputation()
 
   // Update global stats
   await db.update(globalStats, { id: "global" }).set((row) => ({
@@ -576,12 +553,15 @@ ponder.on("TravelerSBT:ReputationUpdated", async ({ event, context }) => {
   const { tokenId, newRating, newTier } = event.args;
   const timestamp = BigInt(event.block.timestamp);
 
-  await db.update(traveler, { id: tokenId.toString() }).set({
+  // ReputationUpdated is only emitted when a review is published for this traveler
+  // So we also increment totalReviewsReceived
+  await db.update(traveler, { id: tokenId.toString() }).set((row) => ({
     averageRating: newRating,
     tier: getTravelerTierString(newTier),
+    totalReviewsReceived: row.totalReviewsReceived + 1n,
     lastActivityAt: timestamp,
     updatedAt: timestamp,
-  });
+  }));
 });
 
 ponder.on("TravelerSBT:TierUpgraded", async ({ event, context }) => {
@@ -658,12 +638,15 @@ ponder.on("HostSBT:ReputationUpdated", async ({ event, context }) => {
   const { tokenId, newRating, newTier } = event.args;
   const timestamp = BigInt(event.block.timestamp);
 
-  await db.update(host, { id: tokenId.toString() }).set({
+  // ReputationUpdated is only emitted when a review is published for this host
+  // So we also increment totalReviewsReceived
+  await db.update(host, { id: tokenId.toString() }).set((row) => ({
     averageRating: newRating,
     tier: getHostTierString(newTier),
+    totalReviewsReceived: row.totalReviewsReceived + 1n,
     lastActivityAt: timestamp,
     updatedAt: timestamp,
-  });
+  }));
 });
 
 ponder.on("HostSBT:TierUpgraded", async ({ event, context }) => {

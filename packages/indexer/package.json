@@ -14,8 +14,7 @@
   "dependencies": {
     "ponder": "^0.15.11",
     "hono": "^4.5.0",
-    "viem": "^2.21.3",
-    "drizzle-orm": "^0.31.0"
+    "viem": "^2.21.3"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

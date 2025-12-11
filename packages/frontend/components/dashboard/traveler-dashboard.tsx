@@ -17,12 +17,17 @@ import {
   BedDouble,
   Eye,
   ChevronRight,
+  AlertCircle,
+  CheckCircle2,
+  LogIn,
+  ChevronDown,
 } from "lucide-react";
 import { useTranslation } from "@/lib/hooks/useTranslation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { useAccount } from "wagmi";
@@ -39,10 +44,17 @@ import { CheckInScanner } from "@/components/booking/CheckInScanner";
 import { usePonderReviews, renderStars } from "@/hooks/usePonderReviews";
 import { getIPFSUrl, fetchFromIPFS } from "@/lib/utils/ipfs";
 import { useQuery } from "@tanstack/react-query";
-import { BookingDetailSheet, CancelBookingModal, RoomDetailModal } from "./booking";
+import {
+  BookingDetailSheet,
+  CancelBookingModal,
+  RoomDetailModal,
+  CompleteStayButton,
+} from "./booking";
 import { ReviewSubmissionForm, type ReviewableBooking } from "@/components/review";
+import { BookingMessaging } from "@/components/messaging";
 import type { RoomTypeData } from "@/lib/hooks/property/types";
 import type { Address } from "viem";
+import { toast } from "sonner";
 
 interface BookingSummary {
   id: string;
@@ -152,6 +164,10 @@ export function TravelerDashboard() {
   const [cancelModalOpen, setCancelModalOpen] = React.useState(false);
   const [roomModalOpen, setRoomModalOpen] = React.useState(false);
   const [reviewModalOpen, setReviewModalOpen] = React.useState(false);
+  const [messagingOpen, setMessagingOpen] = React.useState(false);
+
+  // Track bookings that were just reviewed (for instant UI feedback before refetch)
+  const [justReviewedBookings, setJustReviewedBookings] = React.useState<Set<string>>(new Set());
 
   // Fetch traveler profile from Ponder
   const { traveler, loading: loadingTraveler } = usePonderTraveler({
@@ -159,7 +175,11 @@ export function TravelerDashboard() {
   });
 
   // Fetch reviews given by this traveler
-  const { reviews: reviewsGiven, loading: _loadingReviewsGiven } = usePonderReviews({
+  const {
+    reviews: reviewsGiven,
+    loading: _loadingReviewsGiven,
+    refetch: refetchReviewsGiven,
+  } = usePonderReviews({
     reviewerAddress: address,
   });
 
@@ -262,10 +282,101 @@ export function TravelerDashboard() {
   const upcomingBookings = bookings.filter((b) => b.status === "upcoming");
   const pastBookings = bookings.filter((b) => b.status === "past" || b.status === "cancelled");
 
-  // Calculate total spent
+  // Calculate total spent (only from completed bookings)
   const totalSpent = React.useMemo(() => {
-    return bookings.reduce((sum, b) => sum + b.total, 0);
+    return bookings
+      .filter((b) => b.ponderStatus === "Completed")
+      .reduce((sum, b) => sum + b.total, 0);
   }, [bookings]);
+
+  // Calculate total nights from all bookings
+  const totalNights = React.useMemo(() => {
+    return bookings.reduce((sum, b) => sum + b.nights, 0);
+  }, [bookings]);
+
+  // Get next check-in date
+  const nextCheckIn = React.useMemo(() => {
+    if (upcomingBookings.length === 0) return null;
+    const sorted = [...upcomingBookings].sort((a, b) => a.checkIn.getTime() - b.checkIn.getTime());
+    return sorted[0]?.checkIn || null;
+  }, [upcomingBookings]);
+
+  // Count unique properties visited
+  const uniqueProperties = React.useMemo(() => {
+    const propertySet = new Set(
+      bookings.filter((b) => b.ponderStatus === "Completed").map((b) => b.propertyId)
+    );
+    return propertySet.size;
+  }, [bookings]);
+
+  // Count completed bookings
+  const completedBookingsCount = React.useMemo(() => {
+    return bookings.filter((b) => b.ponderStatus === "Completed").length;
+  }, [bookings]);
+
+  // Calculate detailed pending actions for travelers
+  const pendingActions = React.useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStart = today.getTime() / 1000;
+    const todayEnd = todayStart + 86400; // End of today in seconds
+    const nowTimestamp = Date.now() / 1000;
+
+    // Bookings where traveler can confirm arrival (CheckedIn status on check-in day)
+    // Actually, for travelers, they need to confirmStay on check-in day
+    // Looking at the smart contract flow - travelers confirm after being checked in by host
+    const toConfirmArrival = bookings.filter((b) => {
+      if (b.ponderStatus !== "CheckedIn") return false;
+      // Traveler can confirm arrival on check-in day
+      const checkInTimestamp = b.checkIn.getTime() / 1000;
+      return checkInTimestamp >= todayStart && checkInTimestamp < todayEnd;
+    });
+
+    // Bookings ready for completion or review
+    // This includes:
+    // - CheckedIn bookings past check-in day (need completion or review if escrow already completed)
+    // - Completed bookings without review
+    const reviewedHosts = new Set(
+      reviewsGiven.map((r) => `${r.propertyId}-${r.reviewee.toLowerCase()}`)
+    );
+
+    const toCompleteOrReview = bookings.filter((b) => {
+      if (!b.hostAddress) return false;
+      if (!b.escrowAddress) return false;
+
+      // Already reviewed? Skip
+      const key = `${b.propertyId}-${b.hostAddress.toLowerCase()}`;
+      if (reviewedHosts.has(key)) return false;
+
+      // Just reviewed in this session? Skip (instant feedback before refetch)
+      if (justReviewedBookings.has(b.id)) return false;
+
+      // Completed status in Ponder = definitely needs review
+      if (b.ponderStatus === "Completed") return true;
+
+      // CheckedIn + past check-in day = needs completion OR review (escrow might be already completed)
+      if (b.ponderStatus === "CheckedIn") {
+        const checkInDayEnd = Math.floor(b.checkIn.getTime() / 1000 / 86400) * 86400 + 86400 - 1;
+        return nowTimestamp > checkInDayEnd;
+      }
+
+      return false;
+    });
+
+    // Upcoming check-ins today (Confirmed status, check-in date is today)
+    const checkInsToday = bookings.filter((b) => {
+      if (b.ponderStatus !== "Confirmed") return false;
+      const checkInTimestamp = b.checkIn.getTime() / 1000;
+      return checkInTimestamp >= todayStart && checkInTimestamp < todayEnd;
+    });
+
+    return {
+      total: toConfirmArrival.length + toCompleteOrReview.length + checkInsToday.length,
+      toConfirmArrival,
+      toCompleteOrReview,
+      checkInsToday,
+    };
+  }, [bookings, reviewsGiven, justReviewedBookings]);
 
   const isLoading = loadingBookings || loadingProperties || loadingTraveler;
 
@@ -382,6 +493,9 @@ export function TravelerDashboard() {
                         {t("dashboard.total_bookings")}
                       </p>
                       <p className="text-3xl font-bold">{bookings.length}</p>
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        {totalNights > 0 ? `${totalNights} nights total` : "Start exploring"}
+                      </p>
                     </div>
                     <div className="bg-primary/10 flex h-12 w-12 items-center justify-center rounded-full">
                       <Calendar className="text-primary h-6 w-6" />
@@ -398,6 +512,11 @@ export function TravelerDashboard() {
                         {t("dashboard.upcoming")}
                       </p>
                       <p className="text-3xl font-bold">{upcomingBookings.length}</p>
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        {nextCheckIn
+                          ? `Next: ${nextCheckIn.toLocaleDateString()}`
+                          : "No trips planned"}
+                      </p>
                     </div>
                     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-500/10">
                       <Clock className="h-6 w-6 text-blue-500" />
@@ -411,10 +530,11 @@ export function TravelerDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-muted-foreground text-sm font-medium">Completed Stays</p>
-                      <p className="text-3xl font-bold">
-                        {traveler
-                          ? traveler.completedStays
-                          : pastBookings.filter((b) => b.status === "past").length}
+                      <p className="text-3xl font-bold">{completedBookingsCount}</p>
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        {uniqueProperties > 0
+                          ? `${uniqueProperties} unique properties`
+                          : "Complete your first stay"}
                       </p>
                     </div>
                     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500/10">
@@ -428,11 +548,20 @@ export function TravelerDashboard() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-muted-foreground text-sm font-medium">Total Spent</p>
-                      <p className="text-3xl font-bold">${totalSpent.toFixed(0)}</p>
+                      <p className="text-muted-foreground text-sm font-medium">Your Rating</p>
+                      <p className="text-3xl font-bold">
+                        {traveler && Number(traveler.averageRating) > 0
+                          ? formatTravelerRating(traveler.averageRating).toFixed(1)
+                          : "—"}
+                      </p>
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        {traveler && Number(traveler.totalReviewsReceived) > 0
+                          ? `${traveler.totalReviewsReceived} review${Number(traveler.totalReviewsReceived) !== 1 ? "s" : ""}`
+                          : "No reviews yet"}
+                      </p>
                     </div>
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-500/10">
-                      <DollarSign className="h-6 w-6 text-purple-500" />
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-500/10">
+                      <Star className="h-6 w-6 text-yellow-500" />
                     </div>
                   </div>
                 </CardContent>
@@ -442,20 +571,186 @@ export function TravelerDashboard() {
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-muted-foreground text-sm font-medium">Cancelled</p>
+                      <p className="text-muted-foreground text-sm font-medium">Total Spent</p>
                       <p className="text-3xl font-bold">
-                        {traveler
-                          ? traveler.cancelledBookings
-                          : pastBookings.filter((b) => b.status === "cancelled").length}
+                        ${totalSpent > 0 ? totalSpent.toFixed(0) : "0"}
+                      </p>
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        {completedBookingsCount > 0
+                          ? `~$${Math.round(totalSpent / completedBookingsCount)}/trip avg`
+                          : "Book your first stay"}
                       </p>
                     </div>
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10">
-                      <XCircle className="h-6 w-6 text-red-500" />
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-500/10">
+                      <DollarSign className="h-6 w-6 text-purple-500" />
                     </div>
                   </div>
                 </CardContent>
               </Card>
             </div>
+
+            {/* Action Required Card */}
+            {pendingActions.total > 0 && (
+              <Card className="mb-8 border-yellow-500/50 bg-yellow-500/5">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-yellow-600 dark:text-yellow-400">
+                    <AlertCircle className="h-5 w-5" />
+                    Action Required
+                    <Badge
+                      variant="secondary"
+                      className="ml-auto bg-yellow-500/20 text-yellow-700 dark:text-yellow-300"
+                    >
+                      {pendingActions.total} pending
+                    </Badge>
+                  </CardTitle>
+                  <CardDescription>
+                    Complete these actions to keep your bookings on track
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {/* Check-ins Today */}
+                  {pendingActions.checkInsToday.length > 0 && (
+                    <Collapsible defaultOpen className="rounded-lg border">
+                      <CollapsibleTrigger className="hover:bg-muted/50 flex w-full items-center justify-between p-3 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <LogIn className="h-4 w-4 text-blue-500" />
+                          <span className="text-sm font-medium">Check-in Today</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge className="bg-blue-500 px-2 py-0.5 text-xs text-white">
+                            {pendingActions.checkInsToday.length}
+                          </Badge>
+                          <ChevronDown className="text-muted-foreground h-4 w-4 transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+                        </div>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="px-3 pb-3">
+                        <div className="space-y-2 pt-2">
+                          {pendingActions.checkInsToday.map((booking) => (
+                            <div
+                              key={booking.id}
+                              className="flex items-center justify-between rounded-lg border bg-white/50 p-3 dark:bg-gray-800/50"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate font-medium">{booking.propertyName}</p>
+                                <p className="text-muted-foreground text-sm">{booking.roomName}</p>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleBookingClick(booking)}
+                              >
+                                View Details
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
+
+                  {/* Confirm Arrival */}
+                  {pendingActions.toConfirmArrival.length > 0 && (
+                    <Collapsible defaultOpen className="rounded-lg border">
+                      <CollapsibleTrigger className="hover:bg-muted/50 flex w-full items-center justify-between p-3 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          <span className="text-sm font-medium">Confirm Your Arrival</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge className="bg-green-500 px-2 py-0.5 text-xs text-white">
+                            {pendingActions.toConfirmArrival.length}
+                          </Badge>
+                          <ChevronDown className="text-muted-foreground h-4 w-4 transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+                        </div>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="px-3 pb-3">
+                        <div className="space-y-2 pt-2">
+                          {pendingActions.toConfirmArrival.map((booking) => (
+                            <div
+                              key={booking.id}
+                              className="flex items-center justify-between rounded-lg border bg-white/50 p-3 dark:bg-gray-800/50"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate font-medium">{booking.propertyName}</p>
+                                <p className="text-muted-foreground text-sm">
+                                  Confirm to release payment to host
+                                </p>
+                              </div>
+                              <Button
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700"
+                                onClick={() => handleBookingClick(booking)}
+                              >
+                                Confirm Stay
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
+
+                  {/* Complete or Review */}
+                  {pendingActions.toCompleteOrReview.length > 0 && (
+                    <Collapsible defaultOpen className="rounded-lg border">
+                      <CollapsibleTrigger className="hover:bg-muted/50 flex w-full items-center justify-between p-3 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <Star className="h-4 w-4 text-yellow-500" />
+                          <span className="text-sm font-medium">Complete or Review</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge className="bg-yellow-500 px-2 py-0.5 text-xs text-white">
+                            {pendingActions.toCompleteOrReview.length}
+                          </Badge>
+                          <ChevronDown className="text-muted-foreground h-4 w-4 transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+                        </div>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="px-3 pb-3">
+                        <div className="space-y-2 pt-2">
+                          {pendingActions.toCompleteOrReview.slice(0, 5).map((booking) => {
+                            // Double-check if already reviewed (belt and suspenders)
+                            const hasReview = reviewsGiven.some(
+                              (r) =>
+                                r.propertyId === booking.propertyId &&
+                                r.reviewee.toLowerCase() === booking.hostAddress?.toLowerCase()
+                            );
+                            return (
+                              <div
+                                key={booking.id}
+                                className="flex items-center justify-between rounded-lg border bg-white/50 p-3 dark:bg-gray-800/50"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate font-medium">{booking.propertyName}</p>
+                                  <p className="text-muted-foreground text-sm">
+                                    Stayed {booking.checkOut.toLocaleDateString()}
+                                  </p>
+                                </div>
+                                <CompleteStayButton
+                                  escrowAddress={booking.escrowAddress!}
+                                  checkInDate={booking.checkIn}
+                                  onSuccess={() => refetchBookings()}
+                                  hasReview={hasReview}
+                                  onReviewClick={() => {
+                                    setSelectedBooking(booking);
+                                    setReviewModalOpen(true);
+                                  }}
+                                />
+                              </div>
+                            );
+                          })}
+                          {pendingActions.toCompleteOrReview.length > 5 && (
+                            <p className="text-muted-foreground pt-1 text-center text-sm">
+                              +{pendingActions.toCompleteOrReview.length - 5} more to complete or
+                              review
+                            </p>
+                          )}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Check-In Scanner */}
             {upcomingBookings.length > 0 && (
@@ -594,6 +889,19 @@ export function TravelerDashboard() {
           onOpenChange={setDetailSheetOpen}
           onCancelClick={handleCancelClick}
           onReviewClick={handleReviewClick}
+          onMessage={() => {
+            setDetailSheetOpen(false);
+            setMessagingOpen(true);
+          }}
+          existingReview={
+            selectedBooking
+              ? reviewsGiven.find(
+                  (r) =>
+                    r.propertyId === selectedBooking.propertyId &&
+                    r.reviewee.toLowerCase() === selectedBooking.hostAddress?.toLowerCase()
+                ) || null
+              : null
+          }
         />
 
         <CancelBookingModal
@@ -611,32 +919,52 @@ export function TravelerDashboard() {
           onOpenChange={setRoomModalOpen}
         />
 
-        {/* Review Form Modal */}
-        <ReviewSubmissionForm
-          booking={
-            selectedBooking && selectedBooking.escrowAddress && selectedBooking.hostAddress
-              ? {
-                  id: selectedBooking.id,
-                  propertyId: selectedBooking.propertyId,
-                  propertyName: selectedBooking.propertyName,
-                  roomName: selectedBooking.roomName,
-                  tokenId: selectedBooking.tokenId,
-                  bookingIndex: selectedBooking.bookingIndex,
-                  checkOut: selectedBooking.checkOut,
-                  location: selectedBooking.location,
-                  image: selectedBooking.image,
-                  escrowAddress: selectedBooking.escrowAddress,
-                  hostAddress: selectedBooking.hostAddress,
-                  travelerAddress: selectedBooking.travelerAddress,
+        {/* Review Form Modal - Only render when modal is open to avoid unnecessary queries */}
+        {reviewModalOpen &&
+          selectedBooking &&
+          selectedBooking.escrowAddress &&
+          selectedBooking.hostAddress && (
+            <ReviewSubmissionForm
+              booking={{
+                id: selectedBooking.id,
+                propertyId: selectedBooking.propertyId,
+                propertyName: selectedBooking.propertyName,
+                roomName: selectedBooking.roomName,
+                tokenId: selectedBooking.tokenId,
+                bookingIndex: selectedBooking.bookingIndex,
+                checkOut: selectedBooking.checkOut,
+                location: selectedBooking.location,
+                image: selectedBooking.image,
+                escrowAddress: selectedBooking.escrowAddress,
+                hostAddress: selectedBooking.hostAddress,
+                travelerAddress: selectedBooking.travelerAddress,
+              }}
+              open={reviewModalOpen}
+              onOpenChange={setReviewModalOpen}
+              onSuccess={() => {
+                // Immediately mark this booking as reviewed for instant UI feedback
+                if (selectedBooking) {
+                  setJustReviewedBookings((prev) => new Set([...prev, selectedBooking.id]));
                 }
-              : null
-          }
-          open={reviewModalOpen}
-          onOpenChange={setReviewModalOpen}
-          onSuccess={() => {
-            refetchBookings();
-          }}
-          isTravelerReview={true}
+                // Refetch both bookings and reviews to update the UI
+                refetchBookings();
+                // Add a small delay to allow the indexer to process the review
+                setTimeout(() => {
+                  refetchReviewsGiven();
+                }, 2000);
+              }}
+              isTravelerReview={true}
+            />
+          )}
+
+        {/* Messaging Modal */}
+        <BookingMessaging
+          open={messagingOpen}
+          onOpenChange={setMessagingOpen}
+          peerAddress={selectedBooking?.hostAddress || ""}
+          bookingId={selectedBooking?.id || ""}
+          propertyName={selectedBooking?.propertyName || ""}
+          isHost={false}
         />
       </div>
     </ProtectedRoute>

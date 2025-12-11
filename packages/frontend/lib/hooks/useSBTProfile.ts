@@ -194,11 +194,23 @@ export function formatRating(rating: bigint): string {
   return `${whole}.${decimal.toString().padStart(2, "0")}`;
 }
 
-export function getTierName(tier: number, isTraveler: boolean): string {
+export function getTierName(tier: number | bigint | undefined | null, isTraveler: boolean): string {
+  // Handle undefined or null - default to Newcomer
+  if (tier === undefined || tier === null) {
+    return "Newcomer";
+  }
+  // Convert bigint to number if needed
+  const tierNum = typeof tier === "bigint" ? Number(tier) : tier;
+
+  // Ensure tier is within valid range
+  if (tierNum < 0 || tierNum > 3) {
+    return "Newcomer";
+  }
+
   if (isTraveler) {
-    return ["Newcomer", "Regular", "Trusted", "Elite"][tier] || "Unknown";
+    return ["Newcomer", "Regular", "Trusted", "Elite"][tierNum] || "Newcomer";
   } else {
-    return ["Newcomer", "Experienced", "Pro", "SuperHost"][tier] || "Unknown";
+    return ["Newcomer", "Experienced", "Pro", "SuperHost"][tierNum] || "Newcomer";
   }
 }
 

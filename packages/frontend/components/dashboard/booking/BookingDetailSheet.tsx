@@ -30,9 +30,12 @@ import {
   Check,
   Shield,
   AlertTriangle,
+  Star,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { PonderBooking } from "@/hooks/usePonderBookings";
+import type { PonderReview } from "@/hooks/usePonderReviews";
 import { CheckInActions } from "./CheckInActions";
 
 interface BookingDetailSheetProps {
@@ -61,6 +64,9 @@ interface BookingDetailSheetProps {
   onOpenChange: (open: boolean) => void;
   onCancelClick: () => void;
   onReviewClick: () => void;
+  onMessage?: () => void;
+  /** Existing review for this booking (if any) */
+  existingReview?: PonderReview | null;
 }
 
 const ponderStatusConfig: Record<
@@ -100,6 +106,8 @@ export function BookingDetailSheet({
   onOpenChange,
   onCancelClick,
   onReviewClick,
+  onMessage,
+  existingReview,
 }: BookingDetailSheetProps) {
   const router = useRouter();
   const [copied, setCopied] = React.useState(false);
@@ -111,7 +119,8 @@ export function BookingDetailSheet({
   const isPast = booking.status === "past";
   const canCancel =
     isUpcoming && (booking.ponderStatus === "Pending" || booking.ponderStatus === "Confirmed");
-  const canReview = isPast && booking.ponderStatus === "Completed";
+  // Only show Leave Review button if completed AND no existing review
+  const canReview = isPast && booking.ponderStatus === "Completed" && !existingReview;
   const currencyLabel = booking.currency === "EUR" ? "EURC" : "USDC";
 
   // Calculate days until check-in
@@ -138,9 +147,13 @@ export function BookingDetailSheet({
   };
 
   const handleMessage = () => {
-    toast.info("Messaging feature coming soon!", {
-      description: "You will be able to message the host directly.",
-    });
+    if (onMessage) {
+      onMessage();
+    } else {
+      toast.info("Messaging feature coming soon!", {
+        description: "You will be able to message the host directly.",
+      });
+    }
   };
 
   return (
@@ -348,6 +361,34 @@ export function BookingDetailSheet({
               <MessageSquare className="mr-2 h-4 w-4" />
               Message Host
             </Button>
+
+            {/* Display existing review if user already submitted one */}
+            {existingReview && isPast && booking.ponderStatus === "Completed" && (
+              <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-4">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-600" />
+                  <div className="flex-1">
+                    <p className="font-medium text-green-700 dark:text-green-400">Your Review</p>
+                    <div className="mt-2 flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star
+                          key={star}
+                          className={`h-4 w-4 ${
+                            star <= existingReview.rating
+                              ? "fill-yellow-400 text-yellow-400"
+                              : "text-gray-300"
+                          }`}
+                        />
+                      ))}
+                      <span className="text-muted-foreground ml-2 text-sm">
+                        Submitted{" "}
+                        {new Date(Number(existingReview.createdAt) * 1000).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {canReview && (
               <Button

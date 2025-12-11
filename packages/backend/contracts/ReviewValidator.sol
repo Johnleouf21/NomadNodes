@@ -43,8 +43,12 @@ contract ReviewValidator is Ownable {
     //////////////////////////////////////////////////////////////*/
 
     mapping(uint256 => PendingReview) public pendingReviews;
-    mapping(uint256 => bool) public escrowAlreadyReviewed; // escrowId => reviewed
+    mapping(uint256 => bool) public escrowAlreadyReviewed; // DEPRECATED: kept for storage compatibility
     mapping(address => bool) public moderators;
+
+    // New mapping: escrowId => travelerToHost => reviewed
+    // This allows both traveler and host to leave reviews for the same escrow
+    mapping(uint256 => mapping(bool => bool)) public escrowReviewedByDirection;
 
     uint256 public reviewCounter;
 
@@ -125,8 +129,9 @@ contract ReviewValidator is Ownable {
         // Note: This would require escrowFactory integration
         // For now, we'll check via PropertyRWA booking status
 
-        // Check not already reviewed
-        if (escrowAlreadyReviewed[escrowId]) revert AlreadyReviewed();
+        // Check not already reviewed for this direction
+        // (allows both host and traveler to review the same escrow)
+        if (escrowReviewedByDirection[escrowId][travelerToHost]) revert AlreadyReviewed();
 
         // Verify caller is the buyer/traveler
         // (In production, verify through escrow contract)
@@ -149,7 +154,8 @@ contract ReviewValidator is Ownable {
             travelerToHost: travelerToHost
         });
 
-        escrowAlreadyReviewed[escrowId] = true;
+        // Mark this direction as reviewed (allows the other party to still review)
+        escrowReviewedByDirection[escrowId][travelerToHost] = true;
 
         emit ReviewSubmitted(reviewId, escrowId, msg.sender, reviewee, rating);
 
@@ -197,7 +203,7 @@ contract ReviewValidator is Ownable {
         review.moderator = msg.sender;
 
         // Release escrow review lock (allow resubmission)
-        escrowAlreadyReviewed[review.escrowId] = false;
+        escrowReviewedByDirection[review.escrowId][review.travelerToHost] = false;
 
         emit ReviewRejected(reviewId, msg.sender, reason);
     }
@@ -404,5 +410,14 @@ contract ReviewValidator is Ownable {
             }
         }
         return count;
+    }
+
+    /**
+     * @notice Check if escrow has been reviewed for a specific direction
+     * @param escrowId The escrow ID
+     * @param travelerToHost true to check if traveler reviewed, false to check if host reviewed
+     */
+    function hasReviewed(uint256 escrowId, bool travelerToHost) external view returns (bool) {
+        return escrowReviewedByDirection[escrowId][travelerToHost];
     }
 }

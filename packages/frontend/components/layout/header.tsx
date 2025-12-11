@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Menu, User, LogOut, Wallet, Send, Plus } from "lucide-react";
+import { Menu, User, LogOut, Wallet, Send, Plus, MessageSquare } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useDisconnect, useBalance } from "wagmi";
 import { useAppKit } from "@reown/appkit/react";
@@ -26,6 +26,7 @@ import { TokenBalanceDisplay } from "@/components/shared/token-balance-display";
 import { TokenFaucet } from "@/components/shared/token-faucet";
 import { useTranslation } from "@/lib/hooks/useTranslation";
 import { useAuth } from "@/lib/hooks/useAuth";
+import { MessagingWidget } from "@/components/messaging";
 import { cn } from "@/lib/utils";
 
 export function Header() {
@@ -127,6 +128,13 @@ export function Header() {
             </>
           )}
 
+          {/* Messaging Widget - Only show when connected with SBT */}
+          {isConnected && hasAnySBT && (
+            <div className="hidden md:block">
+              <MessagingWidget />
+            </div>
+          )}
+
           {/* User Menu or Connect Button */}
           {isConnected && address ? (
             <DropdownMenu>
@@ -174,6 +182,14 @@ export function Header() {
                       <Link href="/profile" className="cursor-pointer">
                         <User className="mr-2 h-4 w-4" />
                         {t("nav.profile")}
+                      </Link>
+                    </DropdownMenuItem>
+
+                    {/* Messages */}
+                    <DropdownMenuItem asChild>
+                      <Link href="/messages" className="cursor-pointer">
+                        <MessageSquare className="mr-2 h-4 w-4" />
+                        Messages
                       </Link>
                     </DropdownMenuItem>
 
@@ -300,13 +316,23 @@ export function Header() {
 
                 {/* Conditional mobile menu items */}
                 {isConnected && hasAnySBT && (
-                  <Link
-                    href="/profile"
-                    onClick={() => setIsOpen(false)}
-                    className="hover:text-primary text-lg font-medium transition-colors"
-                  >
-                    {t("nav.profile")}
-                  </Link>
+                  <>
+                    <Link
+                      href="/messages"
+                      onClick={() => setIsOpen(false)}
+                      className="hover:text-primary flex items-center gap-2 text-lg font-medium transition-colors"
+                    >
+                      <MessageSquare className="h-5 w-5" />
+                      Messages
+                    </Link>
+                    <Link
+                      href="/profile"
+                      onClick={() => setIsOpen(false)}
+                      className="hover:text-primary text-lg font-medium transition-colors"
+                    >
+                      {t("nav.profile")}
+                    </Link>
+                  </>
                 )}
 
                 {(!isConnected || !hasHostSBT) && (

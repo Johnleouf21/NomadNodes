@@ -17,14 +17,14 @@ export function SBTDisplay() {
   const hostData = useHostSBTData(address);
 
   return (
-    <Card>
+    <Card className="flex h-full flex-col">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Shield className="text-primary h-5 w-5" />
           {t("profile.soulbound_tokens")}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="flex-1 space-y-4">
         {/* Traveler SBT */}
         <div
           className={`relative overflow-hidden rounded-lg border-2 p-4 transition-all ${

@@ -10,3 +10,4 @@ export { HostBookingCard, type HostBookingCardProps } from "./HostBookingCard";
 export { HostBookingDetailSheet } from "./HostBookingDetailSheet";
 export { CheckInActions } from "./CheckInActions";
 export { WithdrawActions } from "./WithdrawActions";
+export { CompleteStayButton } from "./CompleteStayButton";

@@ -75,6 +75,7 @@ interface HostBookingDetailSheetProps {
   onComplete?: () => void;
   onCancel?: () => void;
   onReviewClick?: () => void;
+  onMessage?: () => void;
   isActionPending?: boolean;
 }
 
@@ -206,6 +207,7 @@ export function HostBookingDetailSheet({
   onComplete,
   onCancel,
   onReviewClick,
+  onMessage,
   isActionPending = false,
 }: HostBookingDetailSheetProps) {
   const router = useRouter();
@@ -306,9 +308,13 @@ export function HostBookingDetailSheet({
   };
 
   const handleMessage = () => {
-    toast.info("Messaging feature coming soon!", {
-      description: "You will be able to message guests directly.",
-    });
+    if (onMessage) {
+      onMessage();
+    } else {
+      toast.info("Messaging feature coming soon!", {
+        description: "You will be able to message guests directly.",
+      });
+    }
   };
 
   // Progress calculation

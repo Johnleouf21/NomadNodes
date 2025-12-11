@@ -304,9 +304,6 @@ importers:
 
   packages/indexer:
     dependencies:
-      drizzle-orm:
-        specifier: ^0.31.0
-        version: 0.31.4(@electric-sql/pglite@0.2.13)(@opentelemetry/api@1.9.0)(@prisma/client@7.0.0(prisma@7.0.0(@types/react@19.2.6)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.15.6)(@types/react@19.2.6)(kysely@0.26.3)(mysql2@3.15.3)(pg@8.16.3)(postgres@3.4.7)(prisma@7.0.0(@types/react@19.2.6)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(typescript@5.9.3))(react@19.2.1)
       hono:
         specifier: ^4.5.0
         version: 4.10.6
@@ -4184,95 +4181,6 @@ packages:
   dotenv@17.2.3:
     resolution: {integrity: sha512-JVUnt+DUIzu87TABbhPmNfVdBDt18BLOWjMUFJMSi/Qqg7NTYtabbvSNJGOJ7afbRuv9D/lngizHtP7QyLQ+9w==}
     engines: {node: '>=12'}
-
-  drizzle-orm@0.31.4:
-    resolution: {integrity: sha512-VGD9SH9aStF2z4QOTnVlVX/WghV/EnuEzTmsH3fSVp2E4fFgc8jl3viQrS/XUJx1ekW4rVVLJMH42SfGQdjX3Q==}
-    peerDependencies:
-      '@aws-sdk/client-rds-data': '>=3'
-      '@cloudflare/workers-types': '>=3'
-      '@electric-sql/pglite': '>=0.1.1'
-      '@libsql/client': '*'
-      '@neondatabase/serverless': '>=0.1'
-      '@op-engineering/op-sqlite': '>=2'
-      '@opentelemetry/api': ^1.4.1
-      '@planetscale/database': '>=1'
-      '@prisma/client': '*'
-      '@tidbcloud/serverless': '*'
-      '@types/better-sqlite3': '*'
-      '@types/pg': '*'
-      '@types/react': '>=18'
-      '@types/sql.js': '*'
-      '@vercel/postgres': '>=0.8.0'
-      '@xata.io/client': '*'
-      better-sqlite3: '>=7'
-      bun-types: '*'
-      expo-sqlite: '>=13.2.0'
-      knex: '*'
-      kysely: '*'
-      mysql2: '>=2'
-      pg: '>=8'
-      postgres: '>=3'
-      prisma: '*'
-      react: '>=18'
-      sql.js: '>=1'
-      sqlite3: '>=5'
-    peerDependenciesMeta:
-      '@aws-sdk/client-rds-data':
-        optional: true
-      '@cloudflare/workers-types':
-        optional: true
-      '@electric-sql/pglite':
-        optional: true
-      '@libsql/client':
-        optional: true
-      '@neondatabase/serverless':
-        optional: true
-      '@op-engineering/op-sqlite':
-        optional: true
-      '@opentelemetry/api':
-        optional: true
-      '@planetscale/database':
-        optional: true
-      '@prisma/client':
-        optional: true
-      '@tidbcloud/serverless':
-        optional: true
-      '@types/better-sqlite3':
-        optional: true
-      '@types/pg':
-        optional: true
-      '@types/react':
-        optional: true
-      '@types/sql.js':
-        optional: true
-      '@vercel/postgres':
-        optional: true
-      '@xata.io/client':
-        optional: true
-      better-sqlite3:
-        optional: true
-      bun-types:
-        optional: true
-      expo-sqlite:
-        optional: true
-      knex:
-        optional: true
-      kysely:
-        optional: true
-      mysql2:
-        optional: true
-      pg:
-        optional: true
-      postgres:
-        optional: true
-      prisma:
-        optional: true
-      react:
-        optional: true
-      sql.js:
-        optional: true
-      sqlite3:
-        optional: true
 
   drizzle-orm@0.41.0:
     resolution: {integrity: sha512-7A4ZxhHk9gdlXmTdPj/lREtP+3u8KvZ4yEN6MYVxBzZGex5Wtdc+CWSbu7btgF6TB0N+MNPrvW7RKBbxJchs/Q==}
@@ -13416,20 +13324,6 @@ snapshots:
   dotenv@16.6.1: {}
 
   dotenv@17.2.3: {}
-
-  drizzle-orm@0.31.4(@electric-sql/pglite@0.2.13)(@opentelemetry/api@1.9.0)(@prisma/client@7.0.0(prisma@7.0.0(@types/react@19.2.6)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.15.6)(@types/react@19.2.6)(kysely@0.26.3)(mysql2@3.15.3)(pg@8.16.3)(postgres@3.4.7)(prisma@7.0.0(@types/react@19.2.6)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(typescript@5.9.3))(react@19.2.1):
-    optionalDependencies:
-      '@electric-sql/pglite': 0.2.13
-      '@opentelemetry/api': 1.9.0
-      '@prisma/client': 7.0.0(prisma@7.0.0(@types/react@19.2.6)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(typescript@5.9.3))(typescript@5.9.3)
-      '@types/pg': 8.15.6
-      '@types/react': 19.2.6
-      kysely: 0.26.3
-      mysql2: 3.15.3
-      pg: 8.16.3
-      postgres: 3.4.7
-      prisma: 7.0.0(@types/react@19.2.6)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(typescript@5.9.3)
-      react: 19.2.1
 
   drizzle-orm@0.41.0(@electric-sql/pglite@0.2.13)(@opentelemetry/api@1.9.0)(@prisma/client@7.0.0(prisma@7.0.0(@types/react@19.2.6)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.15.6)(kysely@0.26.3)(mysql2@3.15.3)(pg@8.16.3)(postgres@3.4.7)(prisma@7.0.0(@types/react@19.2.6)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(typescript@5.9.3)):
     optionalDependencies:
