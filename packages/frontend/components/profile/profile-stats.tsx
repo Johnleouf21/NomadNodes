@@ -20,6 +20,8 @@ import {
   useTravelerProfile,
   useHostProfile,
   useUserReviewsSubmitted,
+  useUserReviewsReceived,
+  useHostPropertyReviews,
 } from "@/lib/hooks/useUserProfile";
 import { usePonderBookings } from "@/hooks/usePonderBookings";
 
@@ -36,11 +38,40 @@ export function ProfileStats() {
   const { data: travelerProfile, isLoading: isTravelerLoading } = useTravelerProfile(address);
   const { data: hostProfile, isLoading: isHostLoading } = useHostProfile(address);
   const { data: reviewsSubmitted, isLoading: isReviewsLoading } = useUserReviewsSubmitted(address);
+  const { data: reviewsReceived = [], isLoading: isReviewsReceivedLoading } =
+    useUserReviewsReceived(address);
 
   // Get property IDs for host bookings query
   const propertyIds = React.useMemo(() => {
     return properties.map((p) => p.propertyId);
   }, [properties]);
+
+  // Fetch property reviews with React Query (cached)
+  const { data: propertyReviews = [], isLoading: isLoadingPropertyReviews } =
+    useHostPropertyReviews(hasHostSBT && propertyIds.length > 0 ? propertyIds : undefined);
+
+  // Calculate average rating from property reviews for hosts, or personal reviews for travelers
+  const { calculatedAvgRating, nonFlaggedReviewCount } = React.useMemo(() => {
+    // For hosts with properties, use property reviews
+    if (hasHostSBT && propertyReviews.length > 0) {
+      const nonFlagged = propertyReviews.filter((r) => !r.isFlagged);
+      if (nonFlagged.length === 0) return { calculatedAvgRating: null, nonFlaggedReviewCount: 0 };
+      const sum = nonFlagged.reduce((acc, r) => acc + Number(r.rating), 0);
+      return {
+        calculatedAvgRating: sum / nonFlagged.length,
+        nonFlaggedReviewCount: nonFlagged.length,
+      };
+    }
+
+    // For travelers or hosts without property reviews, use personal reviews
+    const nonFlagged = reviewsReceived.filter((r) => !r.isFlagged);
+    if (nonFlagged.length === 0) return { calculatedAvgRating: null, nonFlaggedReviewCount: 0 };
+    const sum = nonFlagged.reduce((acc, r) => acc + Number(r.rating), 0);
+    return {
+      calculatedAvgRating: sum / nonFlagged.length,
+      nonFlaggedReviewCount: nonFlagged.length,
+    };
+  }, [hasHostSBT, propertyReviews, reviewsReceived]);
 
   // Fetch bookings received by host (bookings for host's properties)
   const { bookings: hostBookingsReceived, loading: isHostBookingsLoading } = usePonderBookings({
@@ -59,9 +90,17 @@ export function ProfileStats() {
   const hostBookingsReceivedCount = hostBookingsReceived.length;
   const hostCompletedBookings = hostBookingsReceived.filter((b) => b.status === "Completed").length;
 
-  // Get reputation score - prefer Ponder data, fallback to SBT
+  // Get reputation score - prefer calculated from property reviews for hosts (excludes flagged)
   const getReputationScore = () => {
-    // Try Ponder first
+    // Use calculated average from reviews (excludes flagged reviews)
+    if (calculatedAvgRating !== null) {
+      return calculatedAvgRating.toFixed(1);
+    }
+    // Don't fall back to indexed data if we're still loading property reviews for hosts
+    if (hasHostSBT && isLoadingPropertyReviews) {
+      return "...";
+    }
+    // Fallback to Ponder data if no reviews loaded yet
     if (travelerProfile?.averageRating && Number(travelerProfile.averageRating) > 0) {
       return (Number(travelerProfile.averageRating) / 100).toFixed(1);
     }
@@ -78,8 +117,13 @@ export function ProfileStats() {
     return "N/A";
   };
 
-  // Get review count
+  // Get review count - use non-flagged count
   const getReviewCount = () => {
+    // Use calculated non-flagged count if available
+    if (nonFlaggedReviewCount > 0) {
+      return nonFlaggedReviewCount;
+    }
+    // Fallback to profile data
     if (travelerProfile?.totalReviewsReceived) {
       return Number(travelerProfile.totalReviewsReceived);
     }
@@ -107,7 +151,9 @@ export function ProfileStats() {
     isTravelerLoading ||
     isHostLoading ||
     isReviewsLoading ||
+    isReviewsReceivedLoading ||
     isHostBookingsLoading ||
+    isLoadingPropertyReviews ||
     (hasTravelerSBT && travelerSBTData.isLoading) ||
     (hasHostSBT && hostSBTData.isLoading);
 

@@ -30,8 +30,10 @@ export interface UserReview {
   reviewer: string;
   reviewee: string;
   rating: number;
-  ipfsCommentHash: string;
+  helpfulVotes: string | number;
+  unhelpfulVotes: string | number;
   createdAt: string;
+  isFlagged: boolean;
 }
 
 export interface UserProperty {
@@ -70,7 +72,7 @@ export interface TravelerProfileData {
   averageRating: string;
   totalBookings: string;
   completedStays: string;
-  cancellations: string;
+  cancelledBookings: string;
   totalReviewsReceived: string;
   isSuspended: boolean;
   memberSince: string;
@@ -217,8 +219,10 @@ export function useUserReviewsSubmitted(
                 reviewer
                 reviewee
                 rating
-                ipfsCommentHash
+                helpfulVotes
+                unhelpfulVotes
                 createdAt
+                isFlagged
               }
             }
           }`,
@@ -256,8 +260,10 @@ export function useUserReviewsReceived(address: string | undefined) {
                 reviewer
                 reviewee
                 rating
-                ipfsCommentHash
+                helpfulVotes
+                unhelpfulVotes
                 createdAt
+                isFlagged
               }
             }
           }`,
@@ -336,27 +342,29 @@ export function useHostProfile(address: string | undefined) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: `query {
-            host(id: "${address.toLowerCase()}") {
-              id
-              wallet
-              tokenId
-              tier
-              isSuperHost
-              averageRating
-              totalPropertiesListed
-              totalBookingsReceived
-              completedBookings
-              totalReviewsReceived
-              isSuspended
-              memberSince
-              lastActivityAt
+            hosts(where: { wallet: "${address.toLowerCase()}" }, limit: 1) {
+              items {
+                id
+                wallet
+                tokenId
+                tier
+                isSuperHost
+                averageRating
+                totalPropertiesListed
+                totalBookingsReceived
+                completedBookings
+                totalReviewsReceived
+                isSuspended
+                memberSince
+                lastActivityAt
+              }
             }
           }`,
         }),
       });
 
       const result = await response.json();
-      return result.data?.host || null;
+      return result.data?.hosts?.items?.[0] || null;
     },
   });
 }
@@ -378,26 +386,28 @@ export function useTravelerProfile(address: string | undefined) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: `query {
-            traveler(id: "${address.toLowerCase()}") {
-              id
-              wallet
-              tokenId
-              tier
-              averageRating
-              totalBookings
-              completedStays
-              cancellations
-              totalReviewsReceived
-              isSuspended
-              memberSince
-              lastActivityAt
+            travelers(where: { wallet: "${address.toLowerCase()}" }, limit: 1) {
+              items {
+                id
+                wallet
+                tokenId
+                tier
+                averageRating
+                totalBookings
+                completedStays
+                cancelledBookings
+                totalReviewsReceived
+                isSuspended
+                memberSince
+                lastActivityAt
+              }
             }
           }`,
         }),
       });
 
       const result = await response.json();
-      return result.data?.traveler || null;
+      return result.data?.travelers?.items?.[0] || null;
     },
   });
 }
@@ -931,4 +941,48 @@ export function formatRelativeTime(date: Date): string {
   if (diffMonths < 12) return `${diffMonths} month${diffMonths !== 1 ? "s" : ""} ago`;
 
   return date.toLocaleDateString();
+}
+
+/**
+ * Fetch reviews for all host's properties (with React Query caching)
+ * Used by profile components to show aggregated property reviews for hosts
+ */
+export function useHostPropertyReviews(propertyIds: string[] | undefined) {
+  return useQuery<UserReview[]>({
+    queryKey: ["hostPropertyReviews", propertyIds],
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 5 * 60 * 1000, // 5 minutes
+    enabled: !!propertyIds && propertyIds.length > 0,
+    queryFn: async () => {
+      if (!propertyIds || propertyIds.length === 0) return [];
+
+      const propIdsList = propertyIds.map((id) => `"${id}"`).join(", ");
+
+      const response = await fetch(`${PONDER_URL}/graphql`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: `query {
+            reviews(where: { propertyId_in: [${propIdsList}] }, limit: 1000, orderBy: "createdAt", orderDirection: "desc") {
+              items {
+                id
+                reviewId
+                propertyId
+                reviewer
+                reviewee
+                rating
+                helpfulVotes
+                unhelpfulVotes
+                createdAt
+                isFlagged
+              }
+            }
+          }`,
+        }),
+      });
+
+      const result = await response.json();
+      return result.data?.reviews?.items || [];
+    },
+  });
 }

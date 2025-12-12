@@ -157,26 +157,10 @@ export async function POST(request: NextRequest) {
     // Create account from private key
     const account = privateKeyToAccount(signerPrivateKey as Hex);
 
-    console.log("[Batch Quote API] Signer address:", account.address);
-    console.log("[Batch Quote API] Rooms hash:", roomsHash);
-    console.log("[Batch Quote API] Message hash:", messageHash);
-    console.log("[Batch Quote API] Quote params:", {
-      rooms: body.rooms,
-      checkIn: body.checkIn,
-      checkOut: body.checkOut,
-      totalPrice: body.totalPrice,
-      currency: body.currency,
-      validUntil,
-      chainId: CHAIN_ID,
-      escrowFactory: ESCROW_FACTORY_ADDRESS,
-    });
-
     // Sign the message with EIP-191 prefix (toEthSignedMessageHash equivalent)
     const signature = await account.signMessage({
       message: { raw: messageHash as Hex },
     });
-
-    console.log("[Batch Quote API] Signature:", signature);
 
     return NextResponse.json({
       signature,

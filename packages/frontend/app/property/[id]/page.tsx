@@ -40,8 +40,10 @@ import { useCheckMultipleAvailability, useCalendarAvailability } from "@/lib/hoo
 import { useAuth } from "@/lib/hooks/useAuth";
 import { getIPFSUrl } from "@/lib/utils/ipfs";
 import { formatAddress } from "@/lib/utils";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { usePonderRoomTypes, type RoomTypeWithMeta_data } from "@/hooks/usePonderRoomTypes";
+import { usePonderReviews } from "@/hooks/usePonderReviews";
+import { ReviewsModal } from "@/components/review";
 import { useSearchStore } from "@/lib/store";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { GuestSelector } from "@/components/ui/guest-selector";
@@ -180,9 +182,27 @@ export default function PropertyDetailPage() {
 
   const isOwner = data?.hostWallet?.toLowerCase() === address?.toLowerCase();
 
-  // Calculate display values
-  const averageRating = Number(data?.averageRating || 0n) / 100;
-  const totalReviews = Number(data?.totalReviewsReceived || 0n);
+  // Reviews modal state
+  const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
+
+  // Fetch reviews for this property
+  const { reviews: propertyReviews } = usePonderReviews({
+    propertyId: propertyId?.toString(),
+  });
+
+  // Filter out flagged reviews and calculate average excluding them
+  const { nonFlaggedReviews, averageRating, totalReviews } = useMemo(() => {
+    const nonFlagged = propertyReviews.filter((r) => !r.isFlagged);
+    const avg =
+      nonFlagged.length > 0
+        ? nonFlagged.reduce((sum, r) => sum + r.rating, 0) / nonFlagged.length
+        : 0;
+    return {
+      nonFlaggedReviews: nonFlagged,
+      averageRating: avg,
+      totalReviews: nonFlagged.length,
+    };
+  }, [propertyReviews]);
   const totalBookings = Number(data?.totalBookings || 0n);
   // Show total room types count, with available count separately
   const totalRoomTypesCount = roomTypesWithAvailability.length;
@@ -258,11 +278,14 @@ export default function PropertyDetailPage() {
                   <span>{displayLocation}</span>
                 </div>
                 {averageRating > 0 && (
-                  <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setReviewsModalOpen(true)}
+                    className="hover:bg-muted flex items-center gap-1 rounded-md px-2 py-1 transition-colors"
+                  >
                     <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                     <span className="text-foreground font-medium">{averageRating.toFixed(1)}</span>
                     <span>({totalReviews} reviews)</span>
-                  </div>
+                  </button>
                 )}
                 <div className="flex items-center gap-1">
                   <Bed className="h-4 w-4" />
@@ -456,13 +479,16 @@ export default function PropertyDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-muted/50 rounded-lg p-4 text-center">
+                  <button
+                    onClick={() => setReviewsModalOpen(true)}
+                    className="bg-muted/50 hover:bg-muted rounded-lg p-4 text-center transition-colors"
+                  >
                     <Star className="mx-auto mb-2 h-6 w-6 text-yellow-500" />
                     <p className="text-2xl font-bold">
                       {averageRating > 0 ? averageRating.toFixed(1) : "N/A"}
                     </p>
                     <p className="text-muted-foreground text-xs">Rating</p>
-                  </div>
+                  </button>
                   <div className="bg-muted/50 rounded-lg p-4 text-center">
                     <Users className="mx-auto mb-2 h-6 w-6 text-blue-500" />
                     <p className="text-2xl font-bold">{totalBookings}</p>
@@ -473,11 +499,14 @@ export default function PropertyDetailPage() {
                     <p className="text-2xl font-bold">{totalRoomUnits}</p>
                     <p className="text-muted-foreground text-xs">Rooms</p>
                   </div>
-                  <div className="bg-muted/50 rounded-lg p-4 text-center">
+                  <button
+                    onClick={() => setReviewsModalOpen(true)}
+                    className="bg-muted/50 hover:bg-muted rounded-lg p-4 text-center transition-colors"
+                  >
                     <Star className="mx-auto mb-2 h-6 w-6 text-purple-500" />
                     <p className="text-2xl font-bold">{totalReviews}</p>
                     <p className="text-muted-foreground text-xs">Reviews</p>
-                  </div>
+                  </button>
                 </div>
               </CardContent>
             </Card>
@@ -551,6 +580,16 @@ export default function PropertyDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Reviews Modal */}
+      <ReviewsModal
+        open={reviewsModalOpen}
+        onOpenChange={setReviewsModalOpen}
+        reviewsReceived={propertyReviews}
+        reviewsGiven={[]}
+        averageRating={averageRating}
+        totalReviews={totalReviews}
+      />
     </div>
   );
 }

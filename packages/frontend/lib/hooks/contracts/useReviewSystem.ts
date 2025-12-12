@@ -164,16 +164,6 @@ export function useSubmitReview() {
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
   const submitReview = (args: SubmitReviewArgs) => {
-    console.log("useSubmitReview: calling writeContract with args:", {
-      escrowId: args.escrowId.toString(),
-      propertyId: args.propertyId.toString(),
-      bookingIndex: args.bookingIndex.toString(),
-      reviewee: args.reviewee,
-      rating: args.rating,
-      ipfsCommentHash: args.ipfsCommentHash,
-      travelerToHost: args.travelerToHost,
-    });
-
     writeContract(
       {
         ...CONTRACTS.reviewValidator,
@@ -191,9 +181,6 @@ export function useSubmitReview() {
         gas: BigInt(500_000),
       },
       {
-        onSuccess: (data) => {
-          console.log("useSubmitReview: writeContract onSuccess, hash:", data);
-        },
         onError: (err) => {
           console.error("useSubmitReview: writeContract onError:", err);
         },

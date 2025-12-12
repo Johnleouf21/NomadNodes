@@ -299,18 +299,6 @@ export function useBookingConfirmation(): UseBookingConfirmationResult {
 
         // Development mode - simulate the booking flow
         if (IS_DEV_MODE) {
-          console.log("[DEV MODE] Simulating booking flow...");
-          console.log("[DEV MODE] Booking params:", {
-            rooms: params.rooms.map((r) => ({
-              tokenId: r.tokenId.toString(),
-              quantity: r.quantity,
-            })),
-            checkIn: params.checkIn.toISOString(),
-            checkOut: params.checkOut.toISOString(),
-            totalAmount: params.totalAmount,
-            paymentToken: params.paymentToken,
-          });
-
           await new Promise((resolve) => setTimeout(resolve, 500));
           setStatus("approving");
           await new Promise((resolve) => setTimeout(resolve, 500));
@@ -329,9 +317,6 @@ export function useBookingConfirmation(): UseBookingConfirmationResult {
           setEscrowAddresses(mockEscrowAddresses);
           setBatchId(0n);
           setStatus("dev-mode-success");
-
-          console.log("[DEV MODE] Booking simulation complete!");
-          console.log("[DEV MODE] Mock escrow addresses:", mockEscrowAddresses);
 
           return mockTxHash;
         }

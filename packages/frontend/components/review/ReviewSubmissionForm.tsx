@@ -389,12 +389,6 @@ export function ReviewSubmissionForm({
 
   const handleSubmit = async () => {
     if (!booking || !address || rating === 0 || foundEscrowId === null) {
-      console.log("Submit blocked - missing data:", {
-        hasBooking: !!booking,
-        hasAddress: !!address,
-        rating,
-        foundEscrowId: foundEscrowId?.toString(),
-      });
       return;
     }
 
@@ -402,9 +396,7 @@ export function ReviewSubmissionForm({
       setIsUploading(true);
 
       // Upload comment to IPFS
-      console.log("Uploading to IPFS...");
       const ipfsHash = await uploadReviewToIPFS(comment || "No comment provided.");
-      console.log("IPFS hash:", ipfsHash);
 
       setIsUploading(false);
 
@@ -418,16 +410,6 @@ export function ReviewSubmissionForm({
         ipfsCommentHash: ipfsHash,
         travelerToHost: isTravelerReview,
       };
-
-      console.log("Submitting review with data:", {
-        escrowId: reviewData.escrowId.toString(),
-        propertyId: reviewData.propertyId.toString(),
-        bookingIndex: reviewData.bookingIndex.toString(),
-        reviewee: reviewData.reviewee,
-        rating: reviewData.rating,
-        ipfsCommentHash: reviewData.ipfsCommentHash,
-        travelerToHost: reviewData.travelerToHost,
-      });
 
       // Submit review to contract
       submitReview(reviewData);

@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Search, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { DateRange } from "react-day-picker";
 
@@ -15,12 +16,44 @@ import { useSearchStore } from "@/lib/store";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { getAndClearRedirectPath } from "@/components/auth/protected-route";
 
+// Vacation-themed background images from Unsplash
+// ✨ Curated with love by Adélie ✨
+const HERO_IMAGES = [
+  // 🏖️ Beaches & Tropical
+  "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1920&q=80", // Tropical beach
+  "https://images.unsplash.com/photo-1573843981267-be1999ff37cd?w=1920&q=80", // Maldives turquoise water
+  "https://images.unsplash.com/photo-1602002418816-5c0aeef426aa?w=1920&q=80", // Maldives overwater villa
+  // 🏔️ Mountains & Nature
+  "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1920&q=80", // Mountain peaks
+  "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80", // Swiss Alps
+  "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920&q=80", // Snowy mountains at night
+  // 🌆 Cities & Urban
+  "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=1920&q=80", // Paris Eiffel Tower
+  "https://images.unsplash.com/photo-1518391846015-55a9cc003b25?w=1920&q=80", // Tokyo at night
+  "https://images.unsplash.com/photo-1534430480872-3498386e7856?w=1920&q=80", // New York skyline
+  // 🏡 Countryside & Retreats
+  "https://images.unsplash.com/photo-1510798831971-661eb04b3739?w=1920&q=80", // Tuscany countryside
+  "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=1920&q=80", // Luxury pool resort
+  "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=1920&q=80", // Hotel pool at sunset
+];
+
 export function Hero() {
   const { t } = useTranslation();
   const router = useRouter();
   const { isConnected, isConnecting } = useAuth();
   const { filters, setFilters } = useSearchStore();
   const hasRedirected = React.useRef(false);
+
+  // Background image carousel state
+  const [currentImageIndex, setCurrentImageIndex] = React.useState(0);
+
+  // Auto-advance background images every 5 seconds
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentImageIndex((prev) => (prev + 1) % HERO_IMAGES.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Redirect back to the original page after connection
   React.useEffect(() => {
@@ -61,16 +94,41 @@ export function Hero() {
   };
 
   return (
-    <section className="from-primary/10 via-background relative flex min-h-[600px] items-center justify-center overflow-hidden bg-gradient-to-br to-purple-500/10">
+    <section className="relative flex min-h-[600px] items-center justify-center overflow-hidden">
+      {/* Background Image Carousel */}
+      {HERO_IMAGES.map((src, index) => (
+        <div
+          key={src}
+          className={`absolute inset-0 transition-opacity duration-1000 ${
+            index === currentImageIndex ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          <Image
+            src={src}
+            alt={`Vacation destination ${index + 1}`}
+            fill
+            className="object-cover"
+            priority={index === 0}
+            sizes="100vw"
+          />
+        </div>
+      ))}
+
+      {/* Dark overlay for better text readability */}
+      <div className="absolute inset-0 bg-black/50" />
+
+      {/* Gradient overlay for brand consistency */}
+      <div className="from-primary/20 absolute inset-0 bg-gradient-to-br to-purple-500/20" />
+
       <div className="relative z-10 container px-4 py-16 md:py-24">
         <div className="mx-auto max-w-4xl text-center">
           {/* Title */}
-          <h1 className="mb-6 text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
+          <h1 className="mb-6 text-4xl font-bold tracking-tight text-white drop-shadow-lg sm:text-5xl md:text-6xl lg:text-7xl">
             {t("hero.title")}
           </h1>
 
           {/* Subtitle */}
-          <p className="text-muted-foreground mb-12 text-lg sm:text-xl md:text-2xl">
+          <p className="mb-12 text-lg text-white/90 drop-shadow-md sm:text-xl md:text-2xl">
             {t("hero.subtitle")}
           </p>
 
@@ -119,12 +177,12 @@ export function Hero() {
               {!isConnected ? (
                 <>
                   <Link href="/explore">
-                    <Button size="lg" variant="outline" className="w-full sm:w-auto">
+                    <Button size="lg" variant="secondary" className="w-full sm:w-auto">
                       Explore Properties
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
                   </Link>
-                  <p className="text-muted-foreground text-sm">
+                  <p className="text-sm text-white/80">
                     or{" "}
                     <button
                       onClick={() =>
@@ -133,7 +191,7 @@ export function Hero() {
                           ?.shadowRoot?.querySelector("button")
                           ?.click()
                       }
-                      className="text-primary font-medium hover:underline"
+                      className="font-medium text-white underline-offset-2 hover:underline"
                     >
                       connect your wallet
                     </button>{" "}
@@ -153,8 +211,80 @@ export function Hero() {
         </div>
       </div>
 
-      {/* Background Pattern */}
-      <div className="absolute inset-0 -z-10 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px]" />
+      {/* Image Indicators */}
+      <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 gap-2">
+        {HERO_IMAGES.map((_, index) => (
+          <button
+            key={index}
+            onClick={() => setCurrentImageIndex(index)}
+            className={`h-2 rounded-full transition-all ${
+              index === currentImageIndex ? "w-8 bg-white" : "w-2 bg-white/50 hover:bg-white/70"
+            }`}
+            aria-label={`Go to image ${index + 1}`}
+          />
+        ))}
+      </div>
+
+      {/* Easter egg dedication */}
+      <button
+        onClick={() => {
+          const messages = [
+            "🐧 Adélie says: Have an amazing trip!",
+            "🌍 Adventure awaits, bon voyage!",
+            "✈️ The world is yours to explore!",
+            "🏝️ Paradise is just a booking away!",
+            "🎒 Pack your dreams, we'll handle the rest!",
+            "💫 Every journey begins with a single click!",
+          ];
+          const randomMessage = messages[Math.floor(Math.random() * messages.length)];
+
+          // Create floating message
+          const toast = document.createElement("div");
+          toast.textContent = randomMessage;
+          toast.style.cssText = `
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            z-index: 9999;
+            animation: slideUp 0.3s ease-out;
+            opacity: 1;
+          `;
+
+          // Add animation keyframes
+          const style = document.createElement("style");
+          style.textContent = `
+            @keyframes slideUp {
+              from { transform: translateY(20px); opacity: 0; }
+              to { transform: translateY(0); opacity: 1; }
+            }
+            @keyframes fadeOut {
+              from { opacity: 1; }
+              to { opacity: 0; }
+            }
+          `;
+          document.head.appendChild(style);
+          document.body.appendChild(toast);
+
+          // Remove after 3 seconds
+          setTimeout(() => {
+            toast.style.animation = "fadeOut 0.3s ease-out forwards";
+            setTimeout(() => {
+              toast.remove();
+              style.remove();
+            }, 300);
+          }, 3000);
+        }}
+        className="absolute right-4 bottom-4 z-20 hidden cursor-pointer text-[10px] text-white/30 transition-all select-none hover:text-white/60 sm:block"
+      >
+        ✨ Curated with love by Adélie
+      </button>
     </section>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, X, Grid3X3, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -171,7 +171,8 @@ function LightboxDialog({
         className="max-w-[95vw] border-none bg-black/95 p-0 sm:max-w-[90vw]"
         onKeyDown={onKeyDown}
       >
-        <DialogTitle>{propertyName} - Photo Gallery</DialogTitle>
+        <DialogTitle className="sr-only">{propertyName} - Photo Gallery</DialogTitle>
+        <DialogDescription className="sr-only">Browse property photos</DialogDescription>
         <div className="relative flex h-[90vh] flex-col">
           {/* Header */}
           <div className="flex items-center justify-between p-4 text-white">

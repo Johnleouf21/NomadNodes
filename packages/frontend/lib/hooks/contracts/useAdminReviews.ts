@@ -383,3 +383,56 @@ export function useSetAutoApprove() {
     reset,
   };
 }
+
+/**
+ * Flag a published review (ReviewRegistry)
+ * This marks a review as inappropriate without deleting it
+ */
+export function useFlagReview() {
+  const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  const flagReview = (reviewId: bigint, reason: string) => {
+    writeContract({
+      ...CONTRACTS.reviewRegistry,
+      functionName: "flagReview",
+      args: [reviewId, reason],
+    });
+  };
+
+  return {
+    flagReview,
+    hash,
+    isPending,
+    isConfirming,
+    isSuccess,
+    error,
+    reset,
+  };
+}
+
+/**
+ * Unflag a review (ReviewRegistry)
+ */
+export function useUnflagReview() {
+  const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  const unflagReview = (reviewId: bigint) => {
+    writeContract({
+      ...CONTRACTS.reviewRegistry,
+      functionName: "unflagReview",
+      args: [reviewId],
+    });
+  };
+
+  return {
+    unflagReview,
+    hash,
+    isPending,
+    isConfirming,
+    isSuccess,
+    error,
+    reset,
+  };
+}

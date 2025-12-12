@@ -15,6 +15,7 @@ import {
   ArrowRight,
   Copy,
   ExternalLink,
+  Star,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +44,10 @@ export interface HostBookingCardProps {
   onComplete?: () => void;
   onCancel?: () => void;
   isActionPending?: boolean;
+  // Traveler rating info
+  travelerRating?: number; // 0-5 scale
+  travelerReviewCount?: number;
+  onTravelerRatingClick?: () => void;
 }
 
 const statusConfig: Record<
@@ -137,6 +142,9 @@ export function HostBookingCard({
   onComplete,
   onCancel,
   isActionPending = false,
+  travelerRating,
+  travelerReviewCount,
+  onTravelerRatingClick,
 }: HostBookingCardProps) {
   const status = statusConfig[booking.status];
   const StatusIcon = status.icon;
@@ -248,6 +256,22 @@ export function HostBookingCard({
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
+                {/* Traveler Rating */}
+                {travelerRating !== undefined && travelerRating > 0 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTravelerRatingClick?.();
+                    }}
+                    className="hover:bg-muted ml-2 flex items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors"
+                  >
+                    <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
+                    <span className="text-xs font-medium">{travelerRating.toFixed(1)}</span>
+                    {travelerReviewCount !== undefined && travelerReviewCount > 0 && (
+                      <span className="text-muted-foreground text-xs">({travelerReviewCount})</span>
+                    )}
+                  </button>
+                )}
               </div>
               <div className="flex items-center gap-1.5">
                 <DollarSign className="text-muted-foreground h-3.5 w-3.5" />

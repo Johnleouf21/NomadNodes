@@ -41,6 +41,7 @@ import {
   useBatchApprove,
   useBatchPublish,
   useGetReviewsByStatus,
+  useFlagReview,
   ReviewStatus,
   type PendingReviewData,
 } from "@/lib/hooks/contracts/useAdminReviews";
@@ -189,6 +190,14 @@ function PendingReviewsList({
   const [rejectingReview, setRejectingReview] = React.useState<PendingReviewData | null>(null);
   const [rejectReason, setRejectReason] = React.useState("");
 
+  // Flag & Publish state
+  const [flagPublishModalOpen, setFlagPublishModalOpen] = React.useState(false);
+  const [flaggingReview, setFlaggingReview] = React.useState<PendingReviewData | null>(null);
+  const [flagReason, setFlagReason] = React.useState("");
+  const [flagPublishStep, setFlagPublishStep] = React.useState<
+    "idle" | "approving" | "publishing" | "flagging" | "done"
+  >("idle");
+
   const {
     approveReview,
     isPending: isApproving,
@@ -219,14 +228,21 @@ function PendingReviewsList({
     isSuccess: batchPublishSuccess,
     reset: resetBatchPublish,
   } = useBatchPublish();
+  const {
+    flagReview,
+    isPending: isFlagging,
+    isSuccess: flagSuccess,
+    reset: resetFlag,
+  } = useFlagReview();
 
+  // Regular approve success (not part of Flag & Publish flow)
   React.useEffect(() => {
-    if (approveSuccess) {
+    if (approveSuccess && flagPublishStep === "idle") {
       toast.success("Review approved");
       resetApprove();
       onRefresh();
     }
-  }, [approveSuccess, resetApprove, onRefresh]);
+  }, [approveSuccess, resetApprove, onRefresh, flagPublishStep]);
 
   React.useEffect(() => {
     if (rejectSuccess) {
@@ -239,13 +255,14 @@ function PendingReviewsList({
     }
   }, [rejectSuccess, resetReject, onRefresh]);
 
+  // Regular publish success (not part of Flag & Publish flow)
   React.useEffect(() => {
-    if (publishSuccess) {
+    if (publishSuccess && flagPublishStep === "idle") {
       toast.success("Review published");
       resetPublish();
       onRefresh();
     }
-  }, [publishSuccess, resetPublish, onRefresh]);
+  }, [publishSuccess, resetPublish, onRefresh, flagPublishStep]);
 
   React.useEffect(() => {
     if (batchApproveSuccess) {
@@ -264,6 +281,54 @@ function PendingReviewsList({
       onRefresh();
     }
   }, [batchPublishSuccess, resetBatchPublish, onRefresh]);
+
+  // Flag & Publish flow: Step 1 - After approve, publish
+  React.useEffect(() => {
+    if (approveSuccess && flagPublishStep === "approving" && flaggingReview) {
+      resetApprove();
+      setFlagPublishStep("publishing");
+      publishReview(flaggingReview.reviewId);
+    }
+  }, [approveSuccess, flagPublishStep, flaggingReview, resetApprove, publishReview]);
+
+  // Flag & Publish flow: Step 2 - After publish, flag
+  React.useEffect(() => {
+    if (publishSuccess && flagPublishStep === "publishing" && flaggingReview && flagReason) {
+      resetPublish();
+      setFlagPublishStep("flagging");
+      flagReview(flaggingReview.reviewId, flagReason);
+    }
+  }, [publishSuccess, flagPublishStep, flaggingReview, flagReason, resetPublish, flagReview]);
+
+  // Flag & Publish flow: Step 3 - After flag, done
+  React.useEffect(() => {
+    if (flagSuccess && flagPublishStep === "flagging") {
+      toast.success("Review published and flagged for inappropriate content");
+      resetFlag();
+      setFlagPublishStep("done");
+      setFlagPublishModalOpen(false);
+      setFlaggingReview(null);
+      setFlagReason("");
+      onRefresh();
+      // Reset to idle after a short delay
+      setTimeout(() => setFlagPublishStep("idle"), 100);
+    }
+  }, [flagSuccess, flagPublishStep, resetFlag, onRefresh]);
+
+  // Start Flag & Publish process
+  const startFlagAndPublish = () => {
+    if (!flaggingReview || !flagReason.trim()) return;
+
+    if (flaggingReview.status === ReviewStatus.Pending) {
+      // Need to approve first
+      setFlagPublishStep("approving");
+      approveReview(flaggingReview.reviewId);
+    } else if (flaggingReview.status === ReviewStatus.Approved) {
+      // Already approved, just publish
+      setFlagPublishStep("publishing");
+      publishReview(flaggingReview.reviewId);
+    }
+  };
 
   const toggleSelection = (id: bigint) => {
     const s = new Set(selectedReviews);
@@ -398,17 +463,43 @@ function PendingReviewsList({
                         <XCircle className="mr-1 h-4 w-4" />
                         Reject
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30"
+                        onClick={() => {
+                          setFlaggingReview(review);
+                          setFlagPublishModalOpen(true);
+                        }}
+                      >
+                        <Flag className="mr-1 h-4 w-4" />
+                        Flag & Publish
+                      </Button>
                     </>
                   )}
                   {review.status === ReviewStatus.Approved && (
-                    <Button
-                      size="sm"
-                      onClick={() => publishReview(review.reviewId)}
-                      disabled={isPublishing}
-                    >
-                      <ArrowUpRight className="mr-1 h-4 w-4" />
-                      Publish
-                    </Button>
+                    <>
+                      <Button
+                        size="sm"
+                        onClick={() => publishReview(review.reviewId)}
+                        disabled={isPublishing}
+                      >
+                        <ArrowUpRight className="mr-1 h-4 w-4" />
+                        Publish
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30"
+                        onClick={() => {
+                          setFlaggingReview(review);
+                          setFlagPublishModalOpen(true);
+                        }}
+                      >
+                        <Flag className="mr-1 h-4 w-4" />
+                        Flag & Publish
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
@@ -469,6 +560,93 @@ function PendingReviewsList({
             >
               <XCircle className="mr-2 h-4 w-4" />
               Reject
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Flag & Publish Modal */}
+      <Dialog
+        open={flagPublishModalOpen}
+        onOpenChange={(open) => {
+          if (!open && flagPublishStep === "idle") {
+            setFlagPublishModalOpen(false);
+            setFlaggingReview(null);
+            setFlagReason("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Flag className="h-5 w-5 text-orange-500" />
+              Flag & Publish Review
+            </DialogTitle>
+            <DialogDescription>
+              This will publish the review AND immediately flag it as inappropriate. The review will
+              be visible on-chain with a flag, exposing the user&apos;s behavior.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {flaggingReview && (
+              <div className="bg-muted/50 rounded-lg p-3 text-sm">
+                <div className="mb-2 flex items-center gap-2">
+                  <RatingStars rating={flaggingReview.rating} />
+                  <span className="text-muted-foreground">
+                    by {flaggingReview.reviewer.slice(0, 6)}...{flaggingReview.reviewer.slice(-4)}
+                  </span>
+                </div>
+                <ReviewCommentDisplay ipfsHash={flaggingReview.ipfsCommentHash} />
+              </div>
+            )}
+            <div>
+              <Label htmlFor="flag-reason">Flag Reason</Label>
+              <Textarea
+                id="flag-reason"
+                value={flagReason}
+                onChange={(e) => setFlagReason(e.target.value)}
+                placeholder="e.g., hate_speech, harassment, spam, fake_review, inappropriate_content"
+                className="mt-2"
+                disabled={flagPublishStep !== "idle"}
+              />
+            </div>
+            {flagPublishStep !== "idle" && flagPublishStep !== "done" && (
+              <div className="flex items-center gap-2 text-sm text-orange-600">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>
+                  {flagPublishStep === "approving" && "Step 1/3: Approving review..."}
+                  {flagPublishStep === "publishing" && "Step 2/3: Publishing review..."}
+                  {flagPublishStep === "flagging" && "Step 3/3: Flagging review..."}
+                </span>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFlagPublishModalOpen(false);
+                setFlaggingReview(null);
+                setFlagReason("");
+              }}
+              disabled={flagPublishStep !== "idle"}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="default"
+              className="bg-orange-500 hover:bg-orange-600"
+              onClick={startFlagAndPublish}
+              disabled={
+                flagPublishStep !== "idle" ||
+                !flagReason.trim() ||
+                isApproving ||
+                isPublishing ||
+                isFlagging
+              }
+            >
+              <Flag className="mr-2 h-4 w-4" />
+              Flag & Publish
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -32,11 +32,33 @@ import {
   AlertTriangle,
   Star,
   CheckCircle2,
+  Loader2,
+  MessageCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useReadContract } from "wagmi";
 import type { PonderBooking } from "@/hooks/usePonderBookings";
 import type { PonderReview } from "@/hooks/usePonderReviews";
 import { CheckInActions } from "./CheckInActions";
+import { fetchFromIPFS, type ReviewComment } from "@/lib/utils/ipfs";
+import { CONTRACTS } from "@/lib/contracts";
+
+// Type for the Review struct returned by getReview
+interface ReviewStruct {
+  reviewId: bigint;
+  escrowId: bigint;
+  propertyId: bigint;
+  bookingIndex: bigint;
+  reviewer: string;
+  reviewee: string;
+  rating: number;
+  ipfsCommentHash: string;
+  submittedAt: bigint;
+  status: number;
+  moderationNote: string;
+  moderator: string;
+  travelerToHost: boolean;
+}
 
 interface BookingDetailSheetProps {
   booking: {
@@ -111,6 +133,107 @@ export function BookingDetailSheet({
 }: BookingDetailSheetProps) {
   const router = useRouter();
   const [copied, setCopied] = React.useState(false);
+  const [reviewComment, setReviewComment] = React.useState<string | null>(null);
+  const [loadingComment, setLoadingComment] = React.useState(false);
+
+  // Track the current booking to detect changes
+  const currentBookingRef = React.useRef<string | null>(null);
+
+  // Reset state when booking changes
+  React.useEffect(() => {
+    const newBookingId = booking?.id || null;
+    if (newBookingId !== currentBookingRef.current) {
+      currentBookingRef.current = newBookingId;
+      setReviewComment(null);
+      setLoadingComment(false);
+    }
+  }, [booking?.id]);
+
+  // Fetch review data from contract to get ipfsCommentHash
+  // Refetch every time the sheet opens to ensure fresh data
+  const {
+    data: reviewDataRaw,
+    isLoading: isLoadingReviewData,
+    refetch: refetchReviewData,
+  } = useReadContract({
+    ...CONTRACTS.reviewValidator,
+    functionName: "getReview",
+    args: existingReview?.reviewId ? [BigInt(existingReview.reviewId)] : undefined,
+    query: {
+      enabled: !!existingReview?.reviewId && open,
+    },
+  });
+  const reviewData = reviewDataRaw as ReviewStruct | undefined;
+
+  // Fetch the escrow address from EscrowFactory using the escrowId from the review
+  const { data: reviewEscrowAddress } = useReadContract({
+    ...CONTRACTS.escrowFactory,
+    functionName: "escrows",
+    args: reviewData?.escrowId ? [reviewData.escrowId] : undefined,
+    query: {
+      enabled: !!reviewData?.escrowId && open,
+    },
+  });
+
+  // Check if the review actually belongs to this specific booking
+  // We compare the escrow address from EscrowFactory with the booking's escrowAddress
+  // because bookingIndex alone is not unique (each room has its own counter)
+  const reviewBelongsToThisBooking = React.useMemo(() => {
+    if (!existingReview || !reviewData || !booking?.escrowAddress || !reviewEscrowAddress) {
+      return false;
+    }
+
+    const bookingEscrowAddress = booking.escrowAddress.toLowerCase();
+    const reviewEscrowAddr = (reviewEscrowAddress as string).toLowerCase();
+
+    const matches = reviewEscrowAddr === bookingEscrowAddress;
+
+    return matches;
+  }, [existingReview, reviewData, booking?.escrowAddress, booking?.id, reviewEscrowAddress]);
+
+  // Refetch review data when sheet opens
+  React.useEffect(() => {
+    if (open && existingReview?.reviewId) {
+      setReviewComment(null); // Reset comment
+      refetchReviewData();
+    }
+  }, [open, existingReview?.reviewId, refetchReviewData]);
+
+  // Fetch review comment from IPFS ONLY if the review belongs to this booking
+  React.useEffect(() => {
+    async function fetchReviewComment() {
+      // Only fetch if review belongs to this booking
+      if (!reviewBelongsToThisBooking) {
+        setReviewComment(null);
+        return;
+      }
+
+      const ipfsHash = reviewData?.ipfsCommentHash;
+      if (!ipfsHash) {
+        setReviewComment(null);
+        return;
+      }
+
+      setLoadingComment(true);
+      try {
+        const data = await fetchFromIPFS<ReviewComment>(ipfsHash);
+        if (data?.comment) {
+          setReviewComment(data.comment);
+        } else {
+          setReviewComment(null);
+        }
+      } catch (error) {
+        console.warn("Failed to fetch review comment from IPFS:", error);
+        setReviewComment(null);
+      } finally {
+        setLoadingComment(false);
+      }
+    }
+
+    if (open && reviewData) {
+      fetchReviewComment();
+    }
+  }, [reviewData, reviewBelongsToThisBooking, open]);
 
   if (!booking) return null;
 
@@ -119,8 +242,13 @@ export function BookingDetailSheet({
   const isPast = booking.status === "past";
   const canCancel =
     isUpcoming && (booking.ponderStatus === "Pending" || booking.ponderStatus === "Confirmed");
-  // Only show Leave Review button if completed AND no existing review
-  const canReview = isPast && booking.ponderStatus === "Completed" && !existingReview;
+  // Only show Leave Review button if completed AND no existing review for THIS specific booking
+  // We need to wait for reviewData to load to know if a review exists for this booking
+  const canReview =
+    isPast &&
+    booking.ponderStatus === "Completed" &&
+    !isLoadingReviewData &&
+    !reviewBelongsToThisBooking;
   const currencyLabel = booking.currency === "EUR" ? "EURC" : "USDC";
 
   // Calculate days until check-in
@@ -362,33 +490,52 @@ export function BookingDetailSheet({
               Message Host
             </Button>
 
-            {/* Display existing review if user already submitted one */}
-            {existingReview && isPast && booking.ponderStatus === "Completed" && (
-              <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-4">
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-600" />
-                  <div className="flex-1">
-                    <p className="font-medium text-green-700 dark:text-green-400">Your Review</p>
-                    <div className="mt-2 flex items-center gap-1">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Star
-                          key={star}
-                          className={`h-4 w-4 ${
-                            star <= existingReview.rating
-                              ? "fill-yellow-400 text-yellow-400"
-                              : "text-gray-300"
-                          }`}
-                        />
-                      ))}
-                      <span className="text-muted-foreground ml-2 text-sm">
-                        Submitted{" "}
-                        {new Date(Number(existingReview.createdAt) * 1000).toLocaleDateString()}
-                      </span>
+            {/* Display existing review if user already submitted one for THIS booking */}
+            {reviewBelongsToThisBooking &&
+              isPast &&
+              booking.ponderStatus === "Completed" &&
+              existingReview && (
+                <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-4">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-600" />
+                    <div className="flex-1">
+                      <p className="font-medium text-green-700 dark:text-green-400">Your Review</p>
+                      <div className="mt-2 flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <Star
+                            key={star}
+                            className={`h-4 w-4 ${
+                              star <= existingReview.rating
+                                ? "fill-yellow-400 text-yellow-400"
+                                : "text-gray-300"
+                            }`}
+                          />
+                        ))}
+                        <span className="text-muted-foreground ml-2 text-sm">
+                          Submitted{" "}
+                          {new Date(Number(existingReview.createdAt) * 1000).toLocaleDateString()}
+                        </span>
+                      </div>
+                      {/* Display review comment if available */}
+                      {isLoadingReviewData || loadingComment ? (
+                        <div className="text-muted-foreground mt-3 flex items-center gap-2 text-sm">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <span>Loading comment...</span>
+                        </div>
+                      ) : reviewComment ? (
+                        <div className="mt-3">
+                          <div className="flex items-start gap-2">
+                            <MessageCircle className="text-muted-foreground mt-0.5 h-4 w-4 flex-shrink-0" />
+                            <p className="text-muted-foreground text-sm italic">
+                              &quot;{reviewComment}&quot;
+                            </p>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
             {canReview && (
               <Button

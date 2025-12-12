@@ -19,7 +19,7 @@ import {
   MessageSquare,
   ChevronDown,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { useTranslation } from "@/lib/hooks/useTranslation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -56,10 +56,17 @@ import {
 import { CONTRACTS } from "@/lib/contracts";
 import { toast } from "sonner";
 import { HostAnalytics, HostRevenue } from "./analytics";
-import { ReviewSubmissionForm, type ReviewableBooking } from "@/components/review";
+import { ReviewSubmissionForm, type ReviewableBooking, ReviewsModal } from "@/components/review";
 import { BookingMessaging } from "@/components/messaging";
 import { usePonderReviews } from "@/hooks/usePonderReviews";
 import type { Address } from "viem";
+
+// Type for traveler profile from batch fetch
+interface TravelerProfile {
+  wallet: string;
+  averageRating: number; // Already converted to 0-5 scale
+  totalReviewsReceived: number;
+}
 
 // Escrow ABI for autoReleaseToHost
 const ESCROW_ABI = [
@@ -75,11 +82,29 @@ const ESCROW_ABI = [
 export function HostDashboard() {
   const { t } = useTranslation();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = React.useState("properties");
   const { address } = useAuth();
 
   // Filter & sort state
   const [statusFilter, setStatusFilter] = React.useState<BookingStatusFilter>("all");
+
+  // Read tab and status from URL query parameters
+  React.useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && ["properties", "bookings", "analytics", "revenue"].includes(tab)) {
+      setActiveTab(tab);
+    }
+
+    // Also read status filter for bookings tab
+    const status = searchParams.get("status");
+    if (
+      status &&
+      ["all", "Pending", "Confirmed", "CheckedIn", "Completed", "Cancelled"].includes(status)
+    ) {
+      setStatusFilter(status as BookingStatusFilter);
+    }
+  }, [searchParams]);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [sortBy, setSortBy] = React.useState<SortOption>("date-desc");
   const [propertyFilter, setPropertyFilter] = React.useState("all");
@@ -91,6 +116,8 @@ export function HostDashboard() {
   const [isReviewModalOpen, setIsReviewModalOpen] = React.useState(false);
   const [isMessagingOpen, setIsMessagingOpen] = React.useState(false);
   const [messagingBooking, setMessagingBooking] = React.useState<PonderBooking | null>(null);
+  const [travelerReviewsModalOpen, setTravelerReviewsModalOpen] = React.useState(false);
+  const [selectedTravelerAddress, setSelectedTravelerAddress] = React.useState<string | null>(null);
 
   // Action state
   const [pendingAction, setPendingAction] = React.useState<string | null>(null);
@@ -146,6 +173,118 @@ export function HostDashboard() {
   const { reviews: hostReviews } = usePonderReviews({
     reviewerAddress: address,
   });
+
+  // Fetch reviews received by the selected traveler (for modal)
+  const { reviews: selectedTravelerReviewsReceived } = usePonderReviews({
+    revieweeAddress: selectedTravelerAddress || undefined,
+  });
+
+  // Fetch reviews given by the selected traveler (for modal)
+  const { reviews: selectedTravelerReviewsGiven } = usePonderReviews({
+    reviewerAddress: selectedTravelerAddress || undefined,
+  });
+
+  // Traveler profiles map for displaying ratings on booking cards
+  const [travelerProfiles, setTravelerProfiles] = React.useState<Map<string, TravelerProfile>>(
+    new Map()
+  );
+
+  // Fetch traveler profiles for all bookings - calculate rating excluding flagged reviews
+  React.useEffect(() => {
+    async function fetchTravelerProfiles() {
+      if (!ponderBookings || ponderBookings.length === 0) return;
+
+      // Get unique traveler addresses
+      const travelerAddresses = [...new Set(ponderBookings.map((b) => b.traveler.toLowerCase()))];
+      if (travelerAddresses.length === 0) return;
+
+      try {
+        const PONDER_URL = process.env.NEXT_PUBLIC_PONDER_URL || "http://localhost:42069";
+        const addressList = travelerAddresses.map((a) => `"${a}"`).join(", ");
+
+        // Fetch reviews for all travelers to calculate rating excluding flagged
+        const reviewsQuery = `
+          query {
+            reviews(where: { reviewee_in: [${addressList}] }, limit: 1000) {
+              items {
+                reviewee
+                rating
+                isFlagged
+              }
+            }
+          }
+        `;
+
+        const response = await fetch(`${PONDER_URL}/graphql`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: reviewsQuery }),
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          const reviews = result.data?.reviews?.items || [];
+          const map = new Map<string, TravelerProfile>();
+
+          // Group reviews by traveler and calculate average excluding flagged
+          const reviewsByTraveler = new Map<string, { ratings: number[]; total: number }>();
+
+          for (const review of reviews) {
+            const wallet = review.reviewee.toLowerCase();
+            if (!reviewsByTraveler.has(wallet)) {
+              reviewsByTraveler.set(wallet, { ratings: [], total: 0 });
+            }
+            const data = reviewsByTraveler.get(wallet)!;
+            // Only count non-flagged reviews
+            if (!review.isFlagged) {
+              data.ratings.push(Number(review.rating));
+            }
+            data.total++;
+          }
+
+          // Build profiles with calculated averages
+          for (const wallet of travelerAddresses) {
+            const data = reviewsByTraveler.get(wallet);
+            if (data && data.ratings.length > 0) {
+              const avgRating = data.ratings.reduce((a, b) => a + b, 0) / data.ratings.length;
+              map.set(wallet, {
+                wallet,
+                averageRating: avgRating,
+                totalReviewsReceived: data.ratings.length, // Only count non-flagged
+              });
+            } else {
+              // No reviews or all flagged
+              map.set(wallet, {
+                wallet,
+                averageRating: 0,
+                totalReviewsReceived: 0,
+              });
+            }
+          }
+
+          setTravelerProfiles(map);
+        }
+      } catch (error) {
+        console.error("Failed to fetch traveler profiles:", error);
+      }
+    }
+
+    fetchTravelerProfiles();
+  }, [ponderBookings]);
+
+  // Get traveler profile for a booking
+  const getTravelerProfile = React.useCallback(
+    (travelerAddress: string): TravelerProfile | undefined => {
+      return travelerProfiles.get(travelerAddress.toLowerCase());
+    },
+    [travelerProfiles]
+  );
+
+  // Selected traveler profile for modal
+  const selectedTravelerProfile = React.useMemo(() => {
+    if (!selectedTravelerAddress) return null;
+    return travelerProfiles.get(selectedTravelerAddress.toLowerCase()) || null;
+  }, [selectedTravelerAddress, travelerProfiles]);
 
   // Fetch room types for all host properties (with IPFS metadata for currency)
   const [roomTypesMap, setRoomTypesMap] = React.useState<Map<string, RoomTypeWithCurrency>>(
@@ -460,34 +599,72 @@ export function HostDashboard() {
     if (!ponderBookings)
       return { total: 0, toConfirm: [], toCheckIn: [], toComplete: [], toReview: [] };
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayTimestamp = today.getTime() / 1000;
+    const now = new Date();
 
     // Bookings needing confirmation
     const toConfirm = ponderBookings.filter((b) => b.status === "Pending");
 
-    // Bookings ready for check-in (Confirmed + check-in date is today or passed)
-    const toCheckIn = ponderBookings.filter(
-      (b) => b.status === "Confirmed" && Number(b.checkInDate) <= todayTimestamp
-    );
+    // Bookings ready for check-in (Confirmed + check-in day has ended at 23:59 UTC)
+    // Host can only mark check-in after the check-in day ends
+    const toCheckIn = ponderBookings.filter((b) => {
+      if (b.status !== "Confirmed") return false;
+      const checkInDate = new Date(Number(b.checkInDate) * 1000);
+      const checkInDayEnd = new Date(checkInDate);
+      checkInDayEnd.setUTCHours(23, 59, 59, 999);
+      return now > checkInDayEnd;
+    });
 
-    // Bookings ready to complete (CheckedIn + check-out date has passed)
-    const toComplete = ponderBookings.filter(
-      (b) => b.status === "CheckedIn" && Number(b.checkOutDate) <= todayTimestamp
-    );
+    // Bookings ready to complete (CheckedIn + checkout date reached)
+    const toComplete = ponderBookings.filter((b) => {
+      if (b.status !== "CheckedIn") return false;
+      const checkOutDate = new Date(Number(b.checkOutDate) * 1000);
+      return now >= checkOutDate;
+    });
 
     // Completed bookings without host review
     // Host reviews travelers, so we check if the host (reviewer) has reviewed the traveler (reviewee)
-    const reviewedTravelers = new Set(
-      hostReviews.map((r) => `${r.propertyId}-${r.reviewee.toLowerCase()}`)
-    );
-    const toReview = ponderBookings.filter((b) => {
-      if (b.status !== "Completed") return false;
-      if (!b.escrowAddress) return false; // Must have escrow address for review
-      const key = `${b.propertyId}-${b.traveler.toLowerCase()}`;
-      return !reviewedTravelers.has(key);
+    // We need to COUNT reviews per property-traveler combination, not just check if one exists
+    // because the same traveler might book multiple times
+    const reviewCountByKey = new Map<string, number>();
+    hostReviews.forEach((r) => {
+      const key = `${r.propertyId}-${r.reviewee.toLowerCase()}`;
+      reviewCountByKey.set(key, (reviewCountByKey.get(key) || 0) + 1);
     });
+
+    // Count completed bookings per property-traveler and find those needing reviews
+    const bookingCountByKey = new Map<string, number>();
+    const completedWithEscrow = ponderBookings.filter(
+      (b) => b.status === "Completed" && b.escrowAddress
+    );
+    completedWithEscrow.forEach((b) => {
+      const key = `${b.propertyId}-${b.traveler.toLowerCase()}`;
+      bookingCountByKey.set(key, (bookingCountByKey.get(key) || 0) + 1);
+    });
+
+    // Calculate how many reviews are still needed per key
+    const pendingReviewsByKey = new Map<string, number>();
+    bookingCountByKey.forEach((bookingCount, key) => {
+      const reviewCount = reviewCountByKey.get(key) || 0;
+      const pending = bookingCount - reviewCount;
+      if (pending > 0) {
+        pendingReviewsByKey.set(key, pending);
+      }
+    });
+
+    // Build toReview array with the right number of bookings per key
+    const toReview: PonderBooking[] = [];
+    const usedCountByKey = new Map<string, number>();
+
+    for (const booking of completedWithEscrow) {
+      const key = `${booking.propertyId}-${booking.traveler.toLowerCase()}`;
+      const pendingForKey = pendingReviewsByKey.get(key) || 0;
+      const usedForKey = usedCountByKey.get(key) || 0;
+
+      if (usedForKey < pendingForKey) {
+        toReview.push(booking);
+        usedCountByKey.set(key, usedForKey + 1);
+      }
+    }
 
     return {
       total: toConfirm.length + toCheckIn.length + toComplete.length + toReview.length,
@@ -930,6 +1107,7 @@ export function HostDashboard() {
                     {filteredBookings.map((booking) => {
                       const { name, imageUrl } = getPropertyInfo(booking);
                       const { name: roomName, currency } = getRoomTypeInfo(booking);
+                      const travelerProfile = getTravelerProfile(booking.traveler);
                       return (
                         <HostBookingCard
                           key={booking.id}
@@ -957,6 +1135,12 @@ export function HostDashboard() {
                           isActionPending={
                             pendingAction === booking.id && (isWritePending || isTxLoading)
                           }
+                          travelerRating={travelerProfile?.averageRating}
+                          travelerReviewCount={travelerProfile?.totalReviewsReceived}
+                          onTravelerRatingClick={() => {
+                            setSelectedTravelerAddress(booking.traveler);
+                            setTravelerReviewsModalOpen(true);
+                          }}
                         />
                       );
                     })}
@@ -1108,6 +1292,19 @@ export function HostDashboard() {
           bookingId={messagingBooking?.id || ""}
           propertyName={messagingBooking ? getPropertyInfo(messagingBooking).name : ""}
           isHost={true}
+        />
+
+        {/* Traveler Reviews Modal */}
+        <ReviewsModal
+          open={travelerReviewsModalOpen}
+          onOpenChange={(open) => {
+            setTravelerReviewsModalOpen(open);
+            if (!open) setSelectedTravelerAddress(null);
+          }}
+          reviewsReceived={selectedTravelerReviewsReceived}
+          reviewsGiven={selectedTravelerReviewsGiven}
+          averageRating={selectedTravelerProfile?.averageRating || 0}
+          totalReviews={selectedTravelerProfile?.totalReviewsReceived || 0}
         />
       </div>
     </ProtectedRoute>

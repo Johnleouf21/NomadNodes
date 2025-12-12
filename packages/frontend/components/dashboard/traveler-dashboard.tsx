@@ -28,10 +28,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
-import { useAccount } from "wagmi";
+import { useAccount, useReadContracts } from "wagmi";
 import { usePonderBookings, type PonderBooking } from "@/hooks/usePonderBookings";
+import { CONTRACTS } from "@/lib/contracts";
 import { usePonderPropertiesWithMetadata } from "@/hooks/usePonderPropertiesWithMetadata";
 import {
   usePonderTraveler,
@@ -50,7 +51,7 @@ import {
   RoomDetailModal,
   CompleteStayButton,
 } from "./booking";
-import { ReviewSubmissionForm, type ReviewableBooking } from "@/components/review";
+import { ReviewSubmissionForm, type ReviewableBooking, ReviewsModal } from "@/components/review";
 import { BookingMessaging } from "@/components/messaging";
 import type { RoomTypeData } from "@/lib/hooks/property/types";
 import type { Address } from "viem";
@@ -152,11 +153,30 @@ async function fetchRoomTypesForBookings(
   return grouped;
 }
 
+// Status filter type for past bookings
+type PastBookingStatusFilter = "all" | "Completed" | "Cancelled";
+
 export function TravelerDashboard() {
   const { t } = useTranslation();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = React.useState("upcoming");
+  const [pastStatusFilter, setPastStatusFilter] = React.useState<PastBookingStatusFilter>("all");
   const { address } = useAccount();
+
+  // Read tab and status from URL query parameters
+  React.useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && ["upcoming", "past"].includes(tab)) {
+      setActiveTab(tab);
+    }
+
+    // Read status filter for past bookings tab
+    const status = searchParams.get("status");
+    if (status && ["all", "Completed", "Cancelled"].includes(status)) {
+      setPastStatusFilter(status as PastBookingStatusFilter);
+    }
+  }, [searchParams]);
 
   // Modal states
   const [selectedBooking, setSelectedBooking] = React.useState<BookingSummary | null>(null);
@@ -164,6 +184,7 @@ export function TravelerDashboard() {
   const [cancelModalOpen, setCancelModalOpen] = React.useState(false);
   const [roomModalOpen, setRoomModalOpen] = React.useState(false);
   const [reviewModalOpen, setReviewModalOpen] = React.useState(false);
+  const [reviewsModalOpen, setReviewsModalOpen] = React.useState(false);
   const [messagingOpen, setMessagingOpen] = React.useState(false);
 
   // Track bookings that were just reviewed (for instant UI feedback before refetch)
@@ -187,6 +208,83 @@ export function TravelerDashboard() {
   const { reviews: reviewsReceived, loading: _loadingReviewsReceived } = usePonderReviews({
     revieweeAddress: address,
   });
+
+  // Calculate average rating from reviews, excluding flagged ones
+  const { calculatedAvgRating, nonFlaggedReviewCount } = React.useMemo(() => {
+    const nonFlagged = reviewsReceived.filter((r) => !r.isFlagged);
+    if (nonFlagged.length === 0) return { calculatedAvgRating: null, nonFlaggedReviewCount: 0 };
+    const sum = nonFlagged.reduce((acc, r) => acc + r.rating, 0);
+    return {
+      calculatedAvgRating: sum / nonFlagged.length,
+      nonFlaggedReviewCount: nonFlagged.length,
+    };
+  }, [reviewsReceived]);
+
+  // Batch fetch review data from contract to get escrowId for each review
+  const reviewContractCalls = React.useMemo(() => {
+    if (!reviewsGiven || reviewsGiven.length === 0) return [];
+    return reviewsGiven.map((review) => ({
+      ...CONTRACTS.reviewValidator,
+      functionName: "getReview" as const,
+      args: [BigInt(review.reviewId)],
+    }));
+  }, [reviewsGiven]);
+
+  const { data: reviewContractData } = useReadContracts({
+    contracts: reviewContractCalls,
+    query: {
+      enabled: reviewContractCalls.length > 0,
+    },
+  } as any);
+
+  // Extract escrowIds from review contract data
+  // The result is a struct with named properties: { reviewId, escrowId, propertyId, bookingIndex, ... }
+  const escrowIds = React.useMemo(() => {
+    if (!reviewContractData) return [];
+    const ids = reviewContractData
+      .filter((result: any) => result.status === "success" && result.result)
+      .map((result: any) => {
+        // result.result is a struct with named properties
+        const reviewStruct = result.result as { escrowId: bigint };
+        return reviewStruct.escrowId;
+      });
+    return ids;
+  }, [reviewContractData]);
+
+  // Batch fetch escrow addresses from EscrowFactory
+  const escrowAddressCalls = React.useMemo(() => {
+    if (escrowIds.length === 0) return [];
+    return escrowIds.map((escrowId) => ({
+      address: CONTRACTS.escrowFactory.address,
+      abi: CONTRACTS.escrowFactory.abi,
+      functionName: "escrows" as const,
+      args: [escrowId] as const,
+    }));
+  }, [escrowIds]);
+
+  const { data: escrowAddressData } = useReadContracts({
+    contracts: escrowAddressCalls,
+    query: {
+      enabled: escrowAddressCalls.length > 0,
+    },
+  } as any);
+
+  // Build Set of reviewed escrow addresses
+  const reviewedEscrowAddresses = React.useMemo(() => {
+    const addresses = new Set<string>();
+    if (!escrowAddressData) {
+      return addresses;
+    }
+
+    (escrowAddressData as any[]).forEach((result: any) => {
+      if (result.status === "success" && result.result) {
+        const addr = (result.result as string).toLowerCase();
+        addresses.add(addr);
+      }
+    });
+
+    return addresses;
+  }, [escrowAddressData]);
 
   // Fetch bookings from Ponder
   const {
@@ -281,6 +379,21 @@ export function TravelerDashboard() {
 
   const upcomingBookings = bookings.filter((b) => b.status === "upcoming");
   const pastBookings = bookings.filter((b) => b.status === "past" || b.status === "cancelled");
+
+  // Calculate booking counts by ponder status for past bookings
+  const pastBookingCounts = React.useMemo(() => {
+    return {
+      all: pastBookings.length,
+      Completed: pastBookings.filter((b) => b.ponderStatus === "Completed").length,
+      Cancelled: pastBookings.filter((b) => b.ponderStatus === "Cancelled").length,
+    };
+  }, [pastBookings]);
+
+  // Filter past bookings by status
+  const filteredPastBookings = React.useMemo(() => {
+    if (pastStatusFilter === "all") return pastBookings;
+    return pastBookings.filter((b) => b.ponderStatus === pastStatusFilter);
+  }, [pastBookings, pastStatusFilter]);
 
   // Calculate total spent (only from completed bookings)
   const totalSpent = React.useMemo(() => {
@@ -449,23 +562,32 @@ export function TravelerDashboard() {
                     <div className="text-muted-foreground flex flex-wrap items-center gap-4 text-sm">
                       {traveler && (
                         <>
-                          <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setReviewsModalOpen(true)}
+                            className="hover:bg-muted flex items-center gap-1 rounded-md px-2 py-1 transition-colors"
+                          >
                             <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
                             <span className="text-foreground font-medium">
-                              {formatTravelerRating(traveler.averageRating).toFixed(2)}
+                              {calculatedAvgRating !== null
+                                ? calculatedAvgRating.toFixed(2)
+                                : formatTravelerRating(traveler.averageRating).toFixed(2)}
                             </span>
                             <span>rating</span>
-                          </div>
+                            <span className="text-muted-foreground/60">•</span>
+                            <MessageSquare className="h-4 w-4" />
+                            <span>
+                              {nonFlaggedReviewCount > 0
+                                ? nonFlaggedReviewCount
+                                : traveler.totalReviewsReceived}{" "}
+                              reviews
+                            </span>
+                          </button>
                           <div className="flex items-center gap-1">
                             <Calendar className="h-4 w-4" />
                             <span>
                               Member since{" "}
                               {new Date(Number(traveler.memberSince) * 1000).toLocaleDateString()}
                             </span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <MessageSquare className="h-4 w-4" />
-                            <span>{traveler.totalReviewsReceived} reviews</span>
                           </div>
                         </>
                       )}
@@ -477,6 +599,10 @@ export function TravelerDashboard() {
 
                   {/* Quick Actions */}
                   <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => router.push("/profile")}>
+                      <User className="mr-2 h-4 w-4" />
+                      {t("nav.profile")}
+                    </Button>
                     <Button onClick={() => router.push("/explore")}>{t("nav.explore")}</Button>
                   </div>
                 </div>
@@ -544,20 +670,27 @@ export function TravelerDashboard() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card
+                className="hover:bg-muted/50 cursor-pointer transition-colors"
+                onClick={() => setReviewsModalOpen(true)}
+              >
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-muted-foreground text-sm font-medium">Your Rating</p>
                       <p className="text-3xl font-bold">
-                        {traveler && Number(traveler.averageRating) > 0
-                          ? formatTravelerRating(traveler.averageRating).toFixed(1)
-                          : "—"}
+                        {calculatedAvgRating !== null
+                          ? calculatedAvgRating.toFixed(1)
+                          : traveler && Number(traveler.averageRating) > 0
+                            ? formatTravelerRating(traveler.averageRating).toFixed(1)
+                            : "—"}
                       </p>
                       <p className="text-muted-foreground mt-1 text-xs">
-                        {traveler && Number(traveler.totalReviewsReceived) > 0
-                          ? `${traveler.totalReviewsReceived} review${Number(traveler.totalReviewsReceived) !== 1 ? "s" : ""}`
-                          : "No reviews yet"}
+                        {nonFlaggedReviewCount > 0
+                          ? `${nonFlaggedReviewCount} review${nonFlaggedReviewCount !== 1 ? "s" : ""}`
+                          : traveler && Number(traveler.totalReviewsReceived) > 0
+                            ? `${traveler.totalReviewsReceived} review${Number(traveler.totalReviewsReceived) !== 1 ? "s" : ""}`
+                            : "No reviews yet"}
                       </p>
                     </div>
                     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-500/10">
@@ -759,61 +892,6 @@ export function TravelerDashboard() {
               </div>
             )}
 
-            {/* Reviews Section */}
-            {(reviewsReceived.length > 0 || reviewsGiven.length > 0) && (
-              <Card className="mb-8">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <MessageSquare className="h-5 w-5" />
-                    Reviews
-                  </CardTitle>
-                  <CardDescription>
-                    Your reviews from hosts and reviews you have left
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Tabs defaultValue="received">
-                    <TabsList className="mb-4">
-                      <TabsTrigger value="received">
-                        Received ({reviewsReceived.length})
-                      </TabsTrigger>
-                      <TabsTrigger value="given">Given ({reviewsGiven.length})</TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="received">
-                      {reviewsReceived.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-8 text-center">
-                          <Star className="text-muted-foreground/50 mb-4 h-12 w-12" />
-                          <p className="text-muted-foreground">No reviews received yet</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {reviewsReceived.map((review) => (
-                            <ReviewCard key={review.id} review={review} type="received" />
-                          ))}
-                        </div>
-                      )}
-                    </TabsContent>
-
-                    <TabsContent value="given">
-                      {reviewsGiven.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-8 text-center">
-                          <MessageSquare className="text-muted-foreground/50 mb-4 h-12 w-12" />
-                          <p className="text-muted-foreground">You have not left any reviews yet</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {reviewsGiven.map((review) => (
-                            <ReviewCard key={review.id} review={review} type="given" />
-                          ))}
-                        </div>
-                      )}
-                    </TabsContent>
-                  </Tabs>
-                </CardContent>
-              </Card>
-            )}
-
             {/* Bookings Tabs */}
             <Card>
               <CardHeader>
@@ -865,14 +943,66 @@ export function TravelerDashboard() {
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        {pastBookings.map((booking) => (
-                          <BookingCard
-                            key={booking.id}
-                            booking={booking}
-                            onClick={() => handleBookingClick(booking)}
-                            onRoomClick={() => handleRoomClick(booking)}
-                          />
-                        ))}
+                        {/* Status Filter Badges */}
+                        <div className="flex flex-wrap gap-2">
+                          <Badge
+                            variant={pastStatusFilter === "all" ? "default" : "outline"}
+                            className="cursor-pointer"
+                            onClick={() => setPastStatusFilter("all")}
+                          >
+                            All ({pastBookingCounts.all})
+                          </Badge>
+                          <Badge
+                            variant={pastStatusFilter === "Completed" ? "default" : "outline"}
+                            className={`cursor-pointer ${
+                              pastStatusFilter === "Completed"
+                                ? "bg-green-600 hover:bg-green-700"
+                                : "hover:bg-green-100 dark:hover:bg-green-900/30"
+                            }`}
+                            onClick={() => setPastStatusFilter("Completed")}
+                          >
+                            <CheckCircle2 className="mr-1 h-3 w-3" />
+                            Completed ({pastBookingCounts.Completed})
+                          </Badge>
+                          <Badge
+                            variant={pastStatusFilter === "Cancelled" ? "default" : "outline"}
+                            className={`cursor-pointer ${
+                              pastStatusFilter === "Cancelled"
+                                ? "bg-red-600 hover:bg-red-700"
+                                : "hover:bg-red-100 dark:hover:bg-red-900/30"
+                            }`}
+                            onClick={() => setPastStatusFilter("Cancelled")}
+                          >
+                            Cancelled ({pastBookingCounts.Cancelled})
+                          </Badge>
+                        </div>
+
+                        {/* Filtered Bookings */}
+                        {filteredPastBookings.length === 0 ? (
+                          <div className="flex min-h-[200px] flex-col items-center justify-center rounded-lg border-2 border-dashed">
+                            <p className="text-muted-foreground text-sm">
+                              No {pastStatusFilter.toLowerCase()} bookings found
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {filteredPastBookings.map((booking) => (
+                              <BookingCard
+                                key={booking.id}
+                                booking={booking}
+                                onClick={() => handleBookingClick(booking)}
+                                onRoomClick={() => handleRoomClick(booking)}
+                                isReviewed={
+                                  booking.escrowAddress
+                                    ? reviewedEscrowAddresses.has(
+                                        booking.escrowAddress.toLowerCase()
+                                      ) || justReviewedBookings.has(booking.id)
+                                    : false
+                                }
+                              />
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </TabsContent>
@@ -966,57 +1096,26 @@ export function TravelerDashboard() {
           propertyName={selectedBooking?.propertyName || ""}
           isHost={false}
         />
+
+        {/* Reviews Modal */}
+        <ReviewsModal
+          open={reviewsModalOpen}
+          onOpenChange={setReviewsModalOpen}
+          reviewsReceived={reviewsReceived}
+          reviewsGiven={reviewsGiven}
+          averageRating={
+            calculatedAvgRating ?? (traveler ? formatTravelerRating(traveler.averageRating) : 0)
+          }
+          totalReviews={
+            nonFlaggedReviewCount > 0
+              ? nonFlaggedReviewCount
+              : traveler
+                ? Number(traveler.totalReviewsReceived)
+                : 0
+          }
+        />
       </div>
     </ProtectedRoute>
-  );
-}
-
-function ReviewCard({ review, type }: { review: any; type: "given" | "received" }) {
-  const formattedDate = new Date(Number(review.createdAt) * 1000).toLocaleDateString();
-
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className="mb-2 flex items-center gap-2">
-              <span className="text-yellow-500">{renderStars(review.rating)}</span>
-              <span className="text-muted-foreground text-sm">{formattedDate}</span>
-              {review.isFlagged && (
-                <Badge variant="destructive" className="text-xs">
-                  Flagged
-                </Badge>
-              )}
-            </div>
-            <p className="text-muted-foreground text-sm">
-              {type === "received" ? (
-                <>
-                  From:{" "}
-                  <span className="font-mono text-xs">
-                    {review.reviewer.slice(0, 8)}...{review.reviewer.slice(-6)}
-                  </span>
-                </>
-              ) : (
-                <>
-                  To:{" "}
-                  <span className="font-mono text-xs">
-                    {review.reviewee.slice(0, 8)}...{review.reviewee.slice(-6)}
-                  </span>
-                </>
-              )}
-            </p>
-            {review.propertyId && (
-              <p className="text-muted-foreground mt-1 text-sm">Property #{review.propertyId}</p>
-            )}
-          </div>
-          <div className="text-muted-foreground flex items-center gap-2 text-sm">
-            <span className="text-green-500">+{review.helpfulVotes}</span>
-            <span>/</span>
-            <span className="text-red-500">-{review.unhelpfulVotes}</span>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -1024,9 +1123,10 @@ interface BookingCardProps {
   booking: BookingSummary;
   onClick: () => void;
   onRoomClick: () => void;
+  isReviewed?: boolean;
 }
 
-function BookingCard({ booking, onClick, onRoomClick }: BookingCardProps) {
+function BookingCard({ booking, onClick, onRoomClick, isReviewed }: BookingCardProps) {
   const { t } = useTranslation();
 
   const ponderStatusColors: Record<PonderBooking["status"], string> = {
@@ -1093,9 +1193,33 @@ function BookingCard({ booking, onClick, onRoomClick }: BookingCardProps) {
                 <span className="truncate">{booking.location}</span>
               </div>
             </div>
-            <Badge className={`${ponderStatusColors[booking.ponderStatus]} flex-shrink-0 border`}>
-              {booking.ponderStatus}
-            </Badge>
+            <div className="flex flex-shrink-0 flex-col items-end gap-1">
+              <Badge className={`${ponderStatusColors[booking.ponderStatus]} border`}>
+                {booking.ponderStatus}
+              </Badge>
+              {booking.ponderStatus === "Completed" && (
+                <Badge
+                  variant="outline"
+                  className={
+                    isReviewed
+                      ? "border-green-500/50 bg-green-500/10 text-green-700 dark:text-green-400"
+                      : "border-yellow-500/50 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
+                  }
+                >
+                  {isReviewed ? (
+                    <>
+                      <Star className="mr-1 h-3 w-3 fill-current" />
+                      Reviewed
+                    </>
+                  ) : (
+                    <>
+                      <Star className="mr-1 h-3 w-3" />
+                      Leave Review
+                    </>
+                  )}
+                </Badge>
+              )}
+            </div>
           </div>
 
           {/* Dates */}

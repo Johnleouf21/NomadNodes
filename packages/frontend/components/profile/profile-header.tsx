@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -17,7 +18,13 @@ import {
 } from "lucide-react";
 import { formatAddress } from "@/lib/utils";
 import { useTravelerSBTData, useHostSBTData, getTierName } from "@/lib/hooks/useSBTProfile";
-import { useFullUserProfile, useTravelerProfile, useHostProfile } from "@/lib/hooks/useUserProfile";
+import {
+  useFullUserProfile,
+  useTravelerProfile,
+  useHostProfile,
+  useUserReviewsReceived,
+  useHostPropertyReviews,
+} from "@/lib/hooks/useUserProfile";
 
 export function ProfileHeader() {
   const { address, hasTravelerSBT, hasHostSBT, role } = useAuth();
@@ -27,6 +34,34 @@ export function ProfileHeader() {
   const { bookings, properties, isLoading } = useFullUserProfile(address);
   const { data: travelerProfile } = useTravelerProfile(address);
   const { data: hostProfile } = useHostProfile(address);
+  const { data: reviewsReceived = [] } = useUserReviewsReceived(address);
+
+  // Get property IDs for the hook
+  const propertyIds = React.useMemo(() => {
+    if (!hasHostSBT || properties.length === 0) return undefined;
+    return properties.map((p) => p.propertyId);
+  }, [hasHostSBT, properties]);
+
+  // Fetch property reviews with React Query (cached)
+  const { data: propertyReviews = [], isLoading: isLoadingPropertyReviews } =
+    useHostPropertyReviews(propertyIds);
+
+  // Calculate average rating from property reviews for hosts, or personal reviews for travelers
+  const calculatedAvgRating = React.useMemo(() => {
+    // For hosts with properties, use property reviews
+    if (hasHostSBT && propertyReviews.length > 0) {
+      const nonFlagged = propertyReviews.filter((r) => !r.isFlagged);
+      if (nonFlagged.length === 0) return null;
+      const sum = nonFlagged.reduce((acc, r) => acc + Number(r.rating), 0);
+      return sum / nonFlagged.length;
+    }
+
+    // For travelers or hosts without property reviews, use personal reviews
+    const nonFlaggedReviews = reviewsReceived.filter((r) => !r.isFlagged);
+    if (nonFlaggedReviews.length === 0) return null;
+    const sum = nonFlaggedReviews.reduce((acc, r) => acc + Number(r.rating), 0);
+    return sum / nonFlaggedReviews.length;
+  }, [hasHostSBT, propertyReviews, reviewsReceived]);
 
   // Calculate total spent (from completed bookings)
   const totalSpent = bookings
@@ -102,8 +137,17 @@ export function ProfileHeader() {
     return `Active ${Math.floor(diffDays / 30)} month${Math.floor(diffDays / 30) !== 1 ? "s" : ""} ago`;
   };
 
-  // Get average rating
+  // Get average rating - prefer calculated from property reviews for hosts (excludes flagged)
   const getAverageRating = () => {
+    // Use calculated average from reviews (excludes flagged reviews)
+    if (calculatedAvgRating !== null) {
+      return calculatedAvgRating;
+    }
+    // Don't fall back to indexed data if we're still loading property reviews for hosts
+    if (hasHostSBT && isLoadingPropertyReviews) {
+      return null;
+    }
+    // Fallback to profile data only if no reviews loaded yet
     if (travelerProfile?.averageRating) {
       return Number(travelerProfile.averageRating) / 100;
     }
@@ -119,10 +163,12 @@ export function ProfileHeader() {
     return null;
   };
 
-  // Get tier badge
+  // Get tier badge - prefer Ponder data (more up-to-date), fallback to contract
   const getTierBadge = () => {
-    if (hasTravelerSBT && travelerSBTData.profile) {
-      const tierName = getTierName(travelerSBTData.profile.tier, true);
+    // For traveler
+    if (hasTravelerSBT) {
+      // Prefer Ponder tier (already a string), fallback to contract tier (number)
+      const tierName = travelerProfile?.tier || getTierName(travelerSBTData.profile?.tier, true);
       return (
         <Badge variant="outline" className="gap-1 text-xs">
           <Plane className="h-3 w-3" />
@@ -130,13 +176,15 @@ export function ProfileHeader() {
         </Badge>
       );
     }
-    if (hasHostSBT && hostSBTData.profile) {
-      const tierName = getTierName(hostSBTData.profile.tier, false);
+    // For host
+    if (hasHostSBT) {
+      const tierName = hostProfile?.tier || getTierName(hostSBTData.profile?.tier, false);
+      const isSuperHost = hostProfile?.isSuperHost || hostSBTData.profile?.superHost;
       return (
         <Badge variant="outline" className="gap-1 text-xs">
           <Home className="h-3 w-3" />
           {tierName}
-          {hostSBTData.profile.superHost && <Crown className="ml-1 h-3 w-3 text-yellow-500" />}
+          {isSuperHost && <Crown className="ml-1 h-3 w-3 text-yellow-500" />}
         </Badge>
       );
     }

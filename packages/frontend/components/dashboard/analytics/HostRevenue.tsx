@@ -9,12 +9,34 @@ import {
   Clock,
   ArrowUpRight,
   AlertCircle,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+  Layers,
+  X,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import { useReadContracts, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { formatUnits } from "viem";
 import { toast } from "sonner";
@@ -134,10 +156,39 @@ interface EscrowInfo {
   checkInTimestamp: bigint | undefined;
 }
 
+const ITEMS_PER_PAGE = 10;
+
+// Batch withdrawal state interface
+interface BatchWithdrawState {
+  isActive: boolean;
+  escrows: EscrowInfo[];
+  currentIndex: number;
+  completed: string[];
+  failed: string[];
+  status: "idle" | "processing" | "waiting" | "done" | "cancelled";
+}
+
 export function HostRevenue({ bookings, getPropertyInfo, getRoomTypeInfo }: HostRevenueProps) {
   const [withdrawingEscrow, setWithdrawingEscrow] = React.useState<string | null>(null);
   const [releasingEscrow, setReleasingEscrow] = React.useState<string | null>(null);
   const { invalidateEscrows } = useInvalidateQueries();
+
+  // Withdrawal history filters state
+  const [historySearch, setHistorySearch] = React.useState("");
+  const [historyPropertyFilter, setHistoryPropertyFilter] = React.useState<string>("all");
+  const [historyCurrencyFilter, setHistoryCurrencyFilter] = React.useState<string>("all");
+  const [historyPage, setHistoryPage] = React.useState(1);
+
+  // Batch withdrawal state
+  const [batchWithdraw, setBatchWithdraw] = React.useState<BatchWithdrawState>({
+    isActive: false,
+    escrows: [],
+    currentIndex: 0,
+    completed: [],
+    failed: [],
+    status: "idle",
+  });
+  const [batchModalOpen, setBatchModalOpen] = React.useState(false);
 
   // Filter bookings with escrow addresses where funds may be available
   // Include both CheckedIn (escrow may be completed) and Completed bookings
@@ -263,6 +314,75 @@ export function HostRevenue({ bookings, getPropertyInfo, getRoomTypeInfo }: Host
     };
   }, [escrowInfos]);
 
+  // Get withdrawn escrows for history
+  const withdrawnEscrows = React.useMemo(() => {
+    return escrowInfos.filter((e) => e.withdrawn);
+  }, [escrowInfos]);
+
+  // Get unique property names for filter dropdown
+  const uniquePropertyNames = React.useMemo(() => {
+    const names = new Set<string>();
+    withdrawnEscrows.forEach((info) => {
+      const { name } = getPropertyInfo(info.booking);
+      names.add(name);
+    });
+    return Array.from(names).sort();
+  }, [withdrawnEscrows, getPropertyInfo]);
+
+  // Filter and paginate withdrawal history
+  const filteredWithdrawalHistory = React.useMemo(() => {
+    let filtered = withdrawnEscrows;
+
+    // Filter by search (booking number)
+    if (historySearch) {
+      const searchLower = historySearch.toLowerCase();
+      filtered = filtered.filter(
+        (info) =>
+          info.booking.bookingIndex.toString().includes(searchLower) ||
+          getPropertyInfo(info.booking).name.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Filter by property
+    if (historyPropertyFilter !== "all") {
+      filtered = filtered.filter((info) => {
+        const { name } = getPropertyInfo(info.booking);
+        return name === historyPropertyFilter;
+      });
+    }
+
+    // Filter by currency
+    if (historyCurrencyFilter !== "all") {
+      filtered = filtered.filter((info) => {
+        const { currency } = getRoomTypeInfo(info.booking);
+        const currencyLabel = currency === "EUR" ? "EURC" : "USDC";
+        return currencyLabel === historyCurrencyFilter;
+      });
+    }
+
+    return filtered;
+  }, [
+    withdrawnEscrows,
+    historySearch,
+    historyPropertyFilter,
+    historyCurrencyFilter,
+    getPropertyInfo,
+    getRoomTypeInfo,
+  ]);
+
+  // Paginate
+  const paginatedHistory = React.useMemo(() => {
+    const startIndex = (historyPage - 1) * ITEMS_PER_PAGE;
+    return filteredWithdrawalHistory.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredWithdrawalHistory, historyPage]);
+
+  const totalHistoryPages = Math.ceil(filteredWithdrawalHistory.length / ITEMS_PER_PAGE);
+
+  // Reset page when filters change
+  React.useEffect(() => {
+    setHistoryPage(1);
+  }, [historySearch, historyPropertyFilter, historyCurrencyFilter]);
+
   // Withdraw mutation
   const {
     writeContract: withdraw,
@@ -296,6 +416,21 @@ export function HostRevenue({ bookings, getPropertyInfo, getRoomTypeInfo }: Host
     hash: prefHash,
   });
 
+  // Batch withdraw mutation
+  const {
+    writeContract: batchWithdrawCall,
+    data: batchWithdrawHash,
+    isPending: isBatchWithdrawPending,
+    reset: resetBatchWithdraw,
+  } = useWriteContract();
+  const {
+    isLoading: isBatchWithdrawLoading,
+    isSuccess: isBatchWithdrawSuccess,
+    isError: isBatchWithdrawError,
+  } = useWaitForTransactionReceipt({
+    hash: batchWithdrawHash,
+  });
+
   // Success effects with cache invalidation
   React.useEffect(() => {
     if (isWithdrawSuccess) {
@@ -323,6 +458,104 @@ export function HostRevenue({ bookings, getPropertyInfo, getRoomTypeInfo }: Host
     }
   }, [isPrefSuccess, invalidateEscrows]);
 
+  // Batch withdraw success effect
+  React.useEffect(() => {
+    if (isBatchWithdrawSuccess && batchWithdraw.isActive) {
+      const currentEscrow = batchWithdraw.escrows[batchWithdraw.currentIndex];
+
+      setBatchWithdraw((prev) => ({
+        ...prev,
+        completed: [...prev.completed, currentEscrow.escrowAddress],
+        currentIndex: prev.currentIndex + 1,
+        status: prev.currentIndex + 1 >= prev.escrows.length ? "done" : "idle",
+      }));
+
+      // Reset the mutation for the next withdrawal
+      resetBatchWithdraw();
+    }
+  }, [
+    isBatchWithdrawSuccess,
+    batchWithdraw.isActive,
+    batchWithdraw.currentIndex,
+    batchWithdraw.escrows,
+    resetBatchWithdraw,
+  ]);
+
+  // Batch withdraw error effect
+  React.useEffect(() => {
+    if (isBatchWithdrawError && batchWithdraw.isActive) {
+      const currentEscrow = batchWithdraw.escrows[batchWithdraw.currentIndex];
+
+      setBatchWithdraw((prev) => ({
+        ...prev,
+        failed: [...prev.failed, currentEscrow.escrowAddress],
+        currentIndex: prev.currentIndex + 1,
+        status: prev.currentIndex + 1 >= prev.escrows.length ? "done" : "idle",
+      }));
+
+      // Reset the mutation for the next withdrawal
+      resetBatchWithdraw();
+    }
+  }, [
+    isBatchWithdrawError,
+    batchWithdraw.isActive,
+    batchWithdraw.currentIndex,
+    batchWithdraw.escrows,
+    resetBatchWithdraw,
+  ]);
+
+  // Auto-process next batch withdrawal
+  React.useEffect(() => {
+    if (
+      batchWithdraw.isActive &&
+      batchWithdraw.status === "idle" &&
+      batchWithdraw.currentIndex < batchWithdraw.escrows.length
+    ) {
+      const currentEscrow = batchWithdraw.escrows[batchWithdraw.currentIndex];
+
+      setBatchWithdraw((prev) => ({ ...prev, status: "processing" }));
+
+      batchWithdrawCall({
+        address: currentEscrow.escrowAddress as `0x${string}`,
+        abi: ESCROW_ABI,
+        functionName: "withdrawCrypto",
+      });
+    }
+  }, [
+    batchWithdraw.isActive,
+    batchWithdraw.status,
+    batchWithdraw.currentIndex,
+    batchWithdraw.escrows,
+    batchWithdrawCall,
+  ]);
+
+  // Batch done - show summary and invalidate
+  React.useEffect(() => {
+    if (batchWithdraw.status === "done" && batchWithdraw.isActive) {
+      const { completed, failed } = batchWithdraw;
+
+      if (completed.length > 0) {
+        toast.success(
+          `Successfully withdrew from ${completed.length} escrow${completed.length > 1 ? "s" : ""}!`
+        );
+      }
+      if (failed.length > 0) {
+        toast.error(
+          `Failed to withdraw from ${failed.length} escrow${failed.length > 1 ? "s" : ""}`
+        );
+      }
+
+      // Invalidate cache to refresh UI
+      invalidateEscrows(3000);
+    }
+  }, [
+    batchWithdraw.status,
+    batchWithdraw.isActive,
+    batchWithdraw.completed.length,
+    batchWithdraw.failed.length,
+    invalidateEscrows,
+  ]);
+
   const handleWithdraw = (escrowAddress: string) => {
     setWithdrawingEscrow(escrowAddress);
     withdraw({
@@ -349,6 +582,65 @@ export function HostRevenue({ bookings, getPropertyInfo, getRoomTypeInfo }: Host
       args: [PaymentPreference.CRYPTO],
     });
   };
+
+  // Get escrows ready for batch withdrawal (completed with crypto preference)
+  const batchReadyEscrows = React.useMemo(() => {
+    return pendingWithdrawals.filter(
+      (info) =>
+        info.status === EscrowStatus.Completed && info.hostPreference === PaymentPreference.CRYPTO
+    );
+  }, [pendingWithdrawals]);
+
+  // Start batch withdrawal
+  const handleStartBatchWithdraw = () => {
+    if (batchReadyEscrows.length === 0) return;
+
+    setBatchWithdraw({
+      isActive: true,
+      escrows: batchReadyEscrows,
+      currentIndex: 0,
+      completed: [],
+      failed: [],
+      status: "idle",
+    });
+    setBatchModalOpen(true);
+  };
+
+  // Cancel batch withdrawal
+  const handleCancelBatchWithdraw = () => {
+    setBatchWithdraw({
+      isActive: false,
+      escrows: [],
+      currentIndex: 0,
+      completed: [],
+      failed: [],
+      status: "cancelled",
+    });
+    setBatchModalOpen(false);
+    resetBatchWithdraw();
+  };
+
+  // Close batch modal (after completion)
+  const handleCloseBatchModal = () => {
+    setBatchWithdraw({
+      isActive: false,
+      escrows: [],
+      currentIndex: 0,
+      completed: [],
+      failed: [],
+      status: "idle",
+    });
+    setBatchModalOpen(false);
+  };
+
+  // Calculate total amount for batch withdrawal
+  const batchTotalAmount = React.useMemo(() => {
+    return batchReadyEscrows.reduce((total, info) => {
+      const hostAmount =
+        info.amount && info.platformFee ? info.amount - info.platformFee : BigInt(0);
+      return total + hostAmount;
+    }, BigInt(0));
+  }, [batchReadyEscrows]);
 
   if (loadingEscrows) {
     return (
@@ -403,11 +695,26 @@ export function HostRevenue({ bookings, getPropertyInfo, getRoomTypeInfo }: Host
       {/* Pending Withdrawals List */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Wallet className="h-5 w-5" />
-            Pending Withdrawals
-          </CardTitle>
-          <CardDescription>Funds ready to be withdrawn to your wallet</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Wallet className="h-5 w-5" />
+                Pending Withdrawals
+              </CardTitle>
+              <CardDescription className="mt-1">
+                Funds ready to be withdrawn to your wallet
+              </CardDescription>
+            </div>
+            {batchReadyEscrows.length > 1 && (
+              <Button
+                onClick={handleStartBatchWithdraw}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <Layers className="mr-2 h-4 w-4" />
+                Withdraw All ({batchReadyEscrows.length})
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {pendingWithdrawals.length === 0 ? (
@@ -575,20 +882,93 @@ export function HostRevenue({ bookings, getPropertyInfo, getRoomTypeInfo }: Host
       </Card>
 
       {/* Withdrawal History */}
-      {escrowInfos.filter((e) => e.withdrawn).length > 0 && (
+      {withdrawnEscrows.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CheckCircle2 className="h-5 w-5 text-green-500" />
               Withdrawal History
             </CardTitle>
-            <CardDescription>Past withdrawals from completed bookings</CardDescription>
+            <CardDescription>
+              Past withdrawals from completed bookings ({withdrawnEscrows.length} total)
+            </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            {/* Filters */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              {/* Search */}
+              <div className="relative flex-1">
+                <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                <Input
+                  placeholder="Search by booking # or property..."
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+
+              {/* Property Filter */}
+              {uniquePropertyNames.length > 1 && (
+                <Select value={historyPropertyFilter} onValueChange={setHistoryPropertyFilter}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Property" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Properties</SelectItem>
+                    {uniquePropertyNames.map((name) => (
+                      <SelectItem key={name} value={name}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {/* Currency Filter */}
+              <Select value={historyCurrencyFilter} onValueChange={setHistoryCurrencyFilter}>
+                <SelectTrigger className="w-full sm:w-[140px]">
+                  <SelectValue placeholder="Currency" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Currencies</SelectItem>
+                  <SelectItem value="USDC">USDC</SelectItem>
+                  <SelectItem value="EURC">EURC</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Results count */}
+            {(historySearch ||
+              historyPropertyFilter !== "all" ||
+              historyCurrencyFilter !== "all") && (
+              <p className="text-muted-foreground text-sm">
+                Showing {filteredWithdrawalHistory.length} of {withdrawnEscrows.length} withdrawals
+              </p>
+            )}
+
+            {/* List */}
             <div className="space-y-3">
-              {escrowInfos
-                .filter((e) => e.withdrawn)
-                .map((info) => {
+              {paginatedHistory.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <Search className="text-muted-foreground mb-4 h-8 w-8" />
+                  <p className="text-muted-foreground text-center">
+                    No withdrawals match your filters
+                  </p>
+                  <Button
+                    variant="link"
+                    onClick={() => {
+                      setHistorySearch("");
+                      setHistoryPropertyFilter("all");
+                      setHistoryCurrencyFilter("all");
+                    }}
+                    className="mt-2"
+                  >
+                    Clear filters
+                  </Button>
+                </div>
+              ) : (
+                paginatedHistory.map((info) => {
                   const { name: propertyName } = getPropertyInfo(info.booking);
                   const { currency } = getRoomTypeInfo(info.booking);
                   const currencyLabel = currency === "EUR" ? "EURC" : "USDC";
@@ -617,11 +997,218 @@ export function HostRevenue({ bookings, getPropertyInfo, getRoomTypeInfo }: Host
                       </div>
                     </div>
                   );
-                })}
+                })
+              )}
             </div>
+
+            {/* Pagination */}
+            {totalHistoryPages > 1 && (
+              <div className="flex items-center justify-between border-t pt-4">
+                <p className="text-muted-foreground text-sm">
+                  Page {historyPage} of {totalHistoryPages}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                    disabled={historyPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setHistoryPage((p) => Math.min(totalHistoryPages, p + 1))}
+                    disabled={historyPage === totalHistoryPages}
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
+
+      {/* Batch Withdrawal Modal */}
+      <Dialog
+        open={batchModalOpen}
+        onOpenChange={(open) => !open && batchWithdraw.status === "done" && handleCloseBatchModal()}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Layers className="h-5 w-5" />
+              Batch Withdrawal
+            </DialogTitle>
+            <DialogDescription>
+              {batchWithdraw.status === "done"
+                ? "Batch withdrawal complete!"
+                : `Withdrawing from ${batchWithdraw.escrows.length} escrow${batchWithdraw.escrows.length > 1 ? "s" : ""}`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Total Amount */}
+            <div className="rounded-lg bg-green-500/10 p-4 text-center">
+              <p className="text-muted-foreground text-sm">Total Amount</p>
+              <p className="text-2xl font-bold text-green-600">
+                ${Number(formatUnits(batchTotalAmount, 6)).toFixed(2)}
+              </p>
+            </div>
+
+            {/* Progress */}
+            {batchWithdraw.isActive && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Progress</span>
+                  <span className="font-medium">
+                    {batchWithdraw.completed.length + batchWithdraw.failed.length} /{" "}
+                    {batchWithdraw.escrows.length}
+                  </span>
+                </div>
+                <Progress
+                  value={
+                    ((batchWithdraw.completed.length + batchWithdraw.failed.length) /
+                      batchWithdraw.escrows.length) *
+                    100
+                  }
+                  className="h-2"
+                />
+              </div>
+            )}
+
+            {/* Current Transaction */}
+            {batchWithdraw.isActive &&
+              batchWithdraw.status !== "done" &&
+              batchWithdraw.currentIndex < batchWithdraw.escrows.length && (
+                <div className="rounded-lg border p-3">
+                  <div className="flex items-center gap-2">
+                    {(isBatchWithdrawPending || isBatchWithdrawLoading) && (
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                    )}
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">
+                        {
+                          getPropertyInfo(batchWithdraw.escrows[batchWithdraw.currentIndex].booking)
+                            .name
+                        }
+                      </p>
+                      <p className="text-muted-foreground text-xs">
+                        {isBatchWithdrawPending
+                          ? "Waiting for confirmation..."
+                          : "Processing transaction..."}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="text-xs">
+                      {batchWithdraw.currentIndex + 1} of {batchWithdraw.escrows.length}
+                    </Badge>
+                  </div>
+                </div>
+              )}
+
+            {/* Completed List */}
+            {(batchWithdraw.completed.length > 0 || batchWithdraw.failed.length > 0) && (
+              <div className="max-h-[200px] space-y-2 overflow-y-auto">
+                {batchWithdraw.escrows.map((escrow, index) => {
+                  const isCompleted = batchWithdraw.completed.includes(escrow.escrowAddress);
+                  const isFailed = batchWithdraw.failed.includes(escrow.escrowAddress);
+                  const isPending =
+                    index === batchWithdraw.currentIndex && !isCompleted && !isFailed;
+                  const isWaiting = index > batchWithdraw.currentIndex;
+
+                  if (isWaiting) return null;
+
+                  const { name: propertyName } = getPropertyInfo(escrow.booking);
+                  const hostAmount =
+                    escrow.amount && escrow.platformFee
+                      ? escrow.amount - escrow.platformFee
+                      : BigInt(0);
+
+                  return (
+                    <div
+                      key={escrow.escrowAddress}
+                      className={`flex items-center justify-between rounded-lg p-2 text-sm ${
+                        isCompleted
+                          ? "bg-green-500/10"
+                          : isFailed
+                            ? "bg-red-500/10"
+                            : "bg-blue-500/10"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        {isCompleted && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+                        {isFailed && <X className="h-4 w-4 text-red-500" />}
+                        {isPending && <Loader2 className="h-4 w-4 animate-spin text-blue-500" />}
+                        <span
+                          className={
+                            isCompleted ? "text-green-700" : isFailed ? "text-red-700" : ""
+                          }
+                        >
+                          {propertyName}
+                        </span>
+                      </div>
+                      <span
+                        className={`font-medium ${isCompleted ? "text-green-600" : isFailed ? "text-red-600" : ""}`}
+                      >
+                        ${Number(formatUnits(hostAmount, 6)).toFixed(2)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Summary when done */}
+            {batchWithdraw.status === "done" && (
+              <div className="grid grid-cols-2 gap-4 rounded-lg border p-3">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-green-600">
+                    {batchWithdraw.completed.length}
+                  </p>
+                  <p className="text-muted-foreground text-xs">Successful</p>
+                </div>
+                {batchWithdraw.failed.length > 0 && (
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-red-600">{batchWithdraw.failed.length}</p>
+                    <p className="text-muted-foreground text-xs">Failed</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-2">
+              {batchWithdraw.status === "done" ? (
+                <Button onClick={handleCloseBatchModal} className="w-full">
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Done
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleCancelBatchWithdraw}
+                  variant="outline"
+                  className="w-full"
+                  disabled={isBatchWithdrawLoading}
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Cancel
+                </Button>
+              )}
+            </div>
+
+            {/* Info */}
+            {batchWithdraw.status !== "done" && (
+              <p className="text-muted-foreground text-center text-xs">
+                Please confirm each transaction in your wallet. Do not close this window.
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

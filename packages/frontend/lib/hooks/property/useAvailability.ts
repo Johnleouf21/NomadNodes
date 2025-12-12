@@ -44,19 +44,6 @@ export function useSetAvailability() {
       // Estimate gas: ~50k base + ~50k per day
       const estimatedGas = 50000 + daysDiff * 50000;
 
-      console.log("setAvailability call:", {
-        tokenId: tokenId.toString(),
-        unitIndex,
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
-        nextDay: nextDay.toISOString(),
-        startTimestamp: startTimestamp.toString(),
-        endTimestamp: endTimestamp.toString(),
-        available,
-        daysDiff,
-        estimatedGas,
-      });
-
       writeContract({
         ...CONTRACTS.availabilityManager,
         functionName: "setAvailability",
@@ -107,18 +94,6 @@ export function useSetBulkAvailability() {
       // Estimate gas: base + (days * units * ~50k)
       // For 5 units over 30 days = ~7.5M gas
       const estimatedGas = 100000 + daysDiff * numUnitsAvailable * 50000;
-
-      console.log("setBulkAvailability call:", {
-        tokenId: tokenId.toString(),
-        numUnitsAvailable,
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
-        nextDay: nextDay.toISOString(),
-        startTimestamp: startTimestamp.toString(),
-        endTimestamp: endTimestamp.toString(),
-        daysDiff,
-        estimatedGas,
-      });
 
       writeContract({
         ...CONTRACTS.availabilityManager,

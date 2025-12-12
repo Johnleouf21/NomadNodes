@@ -5,52 +5,65 @@ import { useAuth } from "@/lib/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { MessageSquare, Star, Loader2, ChevronRight, Eye, Flag } from "lucide-react";
 import {
-  MessageSquare,
-  Star,
-  Loader2,
-  ChevronDown,
-  ChevronUp,
-  ExternalLink,
-  User,
-} from "lucide-react";
-import { useUserReviewsReceived, formatRelativeTime } from "@/lib/hooks/useUserProfile";
-import Link from "next/link";
+  useUserReviewsReceived,
+  useUserReviewsSubmitted,
+  useFullUserProfile,
+  useHostPropertyReviews,
+} from "@/lib/hooks/useUserProfile";
+import { ReviewsModal } from "@/components/review/ReviewsModal";
 
 export function ReviewsReceived() {
-  const { address } = useAuth();
-  const { data: reviews = [], isLoading } = useUserReviewsReceived(address);
-  const [showAll, setShowAll] = React.useState(false);
+  const { address, hasHostSBT } = useAuth();
+  const { data: personalReviews = [], isLoading: isLoadingPersonal } =
+    useUserReviewsReceived(address);
+  const { data: reviewsGiven = [], isLoading: isLoadingGiven } = useUserReviewsSubmitted(address);
+  const { properties, isLoading: isLoadingProperties } = useFullUserProfile(address);
+  const [isModalOpen, setIsModalOpen] = React.useState(false);
 
-  // Calculate average rating
+  // Get property IDs for the hook
+  const propertyIds = React.useMemo(() => {
+    if (!hasHostSBT || properties.length === 0) return undefined;
+    return properties.map((p) => p.propertyId);
+  }, [hasHostSBT, properties]);
+
+  // Fetch property reviews with React Query (cached)
+  const { data: propertyReviews = [], isLoading: isLoadingPropertyReviews } =
+    useHostPropertyReviews(propertyIds);
+
+  // Use property reviews for hosts, personal reviews for travelers
+  const reviewsReceived =
+    hasHostSBT && propertyReviews.length > 0 ? propertyReviews : personalReviews;
+  const isLoading =
+    isLoadingPersonal || isLoadingProperties || isLoadingPropertyReviews || isLoadingGiven;
+
+  // Separate flagged and non-flagged reviews
+  const { nonFlaggedReviews, flaggedReviews } = React.useMemo(() => {
+    return {
+      nonFlaggedReviews: reviewsReceived.filter((r) => !r.isFlagged),
+      flaggedReviews: reviewsReceived.filter((r) => r.isFlagged),
+    };
+  }, [reviewsReceived]);
+
+  // Calculate average rating EXCLUDING flagged reviews
   const avgRating = React.useMemo(() => {
-    if (reviews.length === 0) return 0;
-    const sum = reviews.reduce((acc, r) => acc + Number(r.rating), 0);
-    return sum / reviews.length;
-  }, [reviews]);
+    if (nonFlaggedReviews.length === 0) return 0;
+    const sum = nonFlaggedReviews.reduce((acc, r) => acc + Number(r.rating), 0);
+    return sum / nonFlaggedReviews.length;
+  }, [nonFlaggedReviews]);
 
-  // Rating distribution
+  // Rating distribution EXCLUDING flagged reviews
   const ratingDistribution = React.useMemo(() => {
     const dist = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
-    reviews.forEach((r) => {
+    nonFlaggedReviews.forEach((r) => {
       const rating = Number(r.rating);
       if (rating >= 1 && rating <= 5) {
         dist[rating as keyof typeof dist]++;
       }
     });
     return dist;
-  }, [reviews]);
-
-  // Show only first 4 unless expanded
-  const displayedReviews = showAll ? reviews : reviews.slice(0, 4);
-  const hasMore = reviews.length > 4;
-
-  // Truncate address for display
-  const truncateAddress = (addr: string) => {
-    if (!addr) return "Anonymous";
-    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-  };
+  }, [nonFlaggedReviews]);
 
   if (isLoading) {
     return (
@@ -58,7 +71,7 @@ export function ReviewsReceived() {
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
             <MessageSquare className="text-primary h-5 w-5" />
-            Reviews Received
+            Reviews
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-1 items-center justify-center">
@@ -69,142 +82,108 @@ export function ReviewsReceived() {
   }
 
   return (
-    <Card className="flex h-full flex-col">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <MessageSquare className="text-primary h-5 w-5" />
-            Reviews Received
-          </CardTitle>
-          <Badge variant="secondary">{reviews.length} reviews</Badge>
-        </div>
-
-        {/* Rating summary */}
-        {reviews.length > 0 && (
-          <div className="mt-3 flex items-center gap-4">
-            {/* Average rating */}
+    <>
+      <Card className="flex h-full flex-col">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <MessageSquare className="text-primary h-5 w-5" />
+              Reviews
+            </CardTitle>
             <div className="flex items-center gap-2">
-              <div className="flex items-center">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <Star
-                    key={star}
-                    className={`h-4 w-4 ${
-                      star <= Math.round(avgRating)
-                        ? "fill-yellow-400 text-yellow-400"
-                        : "text-gray-300"
-                    }`}
-                  />
-                ))}
-              </div>
-              <span className="text-lg font-bold">{avgRating.toFixed(1)}</span>
-            </div>
-
-            {/* Rating distribution mini bars */}
-            <div className="flex flex-1 items-center gap-1">
-              {([5, 4, 3, 2, 1] as const).map((rating) => {
-                const count = ratingDistribution[rating];
-                const percent = reviews.length > 0 ? (count / reviews.length) * 100 : 0;
-                return (
-                  <div key={rating} className="flex flex-1 flex-col items-center gap-0.5">
-                    <div className="bg-muted h-8 w-full overflow-hidden rounded-sm">
-                      <div
-                        className="w-full bg-yellow-400 transition-all"
-                        style={{ height: `${percent}%` }}
-                      />
-                    </div>
-                    <span className="text-muted-foreground text-[9px]">{rating}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </CardHeader>
-
-      <CardContent className="flex-1 pt-0">
-        <ScrollArea className={showAll ? "h-[350px]" : undefined}>
-          <div className="grid gap-2">
-            {displayedReviews.length > 0 ? (
-              displayedReviews.map((review) => (
-                <div
-                  key={review.id}
-                  className="hover:bg-muted/50 rounded-lg border p-3 transition-colors"
+              {flaggedReviews.length > 0 && (
+                <Badge
+                  variant="outline"
+                  className="gap-1 border-red-300 text-red-600 dark:border-red-800 dark:text-red-400"
                 >
-                  {/* Header: Stars + Date */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Star
-                          key={star}
-                          className={`h-3.5 w-3.5 ${
-                            star <= Number(review.rating)
-                              ? "fill-yellow-400 text-yellow-400"
-                              : "text-gray-300"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                    <span className="text-muted-foreground text-[10px]">
-                      {formatRelativeTime(new Date(Number(review.createdAt) * 1000))}
-                    </span>
-                  </div>
-
-                  {/* Reviewer info */}
-                  <div className="mt-2 flex items-center gap-2">
-                    <div className="bg-muted flex h-6 w-6 items-center justify-center rounded-full">
-                      <User className="text-muted-foreground h-3 w-3" />
-                    </div>
-                    <span className="text-muted-foreground text-xs">
-                      {truncateAddress(review.reviewer)}
-                    </span>
-                  </div>
-
-                  {/* Property link */}
-                  {review.propertyId && (
-                    <Link
-                      href={`/property/${review.propertyId}`}
-                      className="text-primary mt-2 inline-flex items-center gap-1 text-[10px] hover:underline"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      View Property
-                    </Link>
-                  )}
-                </div>
-              ))
-            ) : (
-              <div className="text-muted-foreground py-8 text-center">
-                <MessageSquare className="mx-auto mb-2 h-8 w-8 opacity-50" />
-                <p className="font-medium">No reviews yet</p>
-                <p className="mt-1 text-sm">
-                  Complete stays to receive reviews from hosts and travelers
-                </p>
-              </div>
-            )}
+                  <Flag className="h-3 w-3" />
+                  {flaggedReviews.length} flagged
+                </Badge>
+              )}
+              <Badge variant="secondary">{nonFlaggedReviews.length} reviews</Badge>
+            </div>
           </div>
-        </ScrollArea>
+        </CardHeader>
 
-        {/* Show more/less button */}
-        {hasMore && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-2 w-full"
-            onClick={() => setShowAll(!showAll)}
-          >
-            {showAll ? (
-              <>
-                <ChevronUp className="mr-1 h-4 w-4" />
-                Show less
-              </>
-            ) : (
-              <>
-                <ChevronDown className="mr-1 h-4 w-4" />
-                Show {reviews.length - 4} more
-              </>
-            )}
-          </Button>
-        )}
-      </CardContent>
-    </Card>
+        <CardContent className="flex-1 pt-0">
+          {nonFlaggedReviews.length > 0 ? (
+            <div className="space-y-4">
+              {/* Rating summary */}
+              <div className="flex items-center gap-4">
+                {/* Average rating */}
+                <div className="text-center">
+                  <div className="text-3xl font-bold">{avgRating.toFixed(1)}</div>
+                  <div className="mt-1 flex items-center justify-center gap-0.5">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Star
+                        key={star}
+                        className={`h-4 w-4 ${
+                          star <= Math.round(avgRating)
+                            ? "fill-yellow-400 text-yellow-400"
+                            : "text-gray-300"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Rating distribution bars */}
+                <div className="flex flex-1 flex-col gap-1">
+                  {([5, 4, 3, 2, 1] as const).map((rating) => {
+                    const count = ratingDistribution[rating];
+                    const percent =
+                      nonFlaggedReviews.length > 0 ? (count / nonFlaggedReviews.length) * 100 : 0;
+                    return (
+                      <div key={rating} className="flex items-center gap-2">
+                        <span className="text-muted-foreground w-3 text-xs">{rating}</span>
+                        <div className="bg-muted h-2 flex-1 overflow-hidden rounded-full">
+                          <div
+                            className="h-full bg-yellow-400 transition-all"
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+                        <span className="text-muted-foreground w-6 text-right text-xs">
+                          {count}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* View all button */}
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={() => setIsModalOpen(true)}
+              >
+                <Eye className="h-4 w-4" />
+                View all reviews
+                <ChevronRight className="ml-auto h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="text-muted-foreground flex flex-col items-center justify-center py-8 text-center">
+              <MessageSquare className="mb-2 h-8 w-8 opacity-50" />
+              <p className="font-medium">No reviews yet</p>
+              <p className="mt-1 text-sm">
+                Complete stays to receive reviews from hosts and travelers
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Reviews Modal */}
+      <ReviewsModal
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        reviewsReceived={reviewsReceived}
+        reviewsGiven={reviewsGiven}
+        averageRating={avgRating}
+        totalReviews={nonFlaggedReviews.length}
+        isLoading={isLoading}
+      />
+    </>
   );
 }

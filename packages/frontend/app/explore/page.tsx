@@ -58,7 +58,6 @@ export default function ExplorePage() {
 
   const handleSearch = () => {
     // Trigger search - the searchFilters will automatically update the blockchain query
-    console.log("Searching with filters:", searchFilters);
   };
 
   return (

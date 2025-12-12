@@ -178,31 +178,12 @@ export function usePlatformStats() {
       const travelers = travelersData.data?.travelers?.items || [];
       const reviews = reviewsData.data?.reviews?.items || [];
 
-      // Debug logging
-      console.log("[Admin Stats] Data fetched:", {
-        ponderUrl: PONDER_URL,
-        properties: properties.length,
-        roomTypes: roomTypes.length,
-        bookings: allBookings.length,
-        hosts: hosts.length,
-        travelers: travelers.length,
-        reviews: reviews.length,
-      });
-
       // Group bookings by status
       const pending = allBookings.filter((b: { status: string }) => b.status === "Pending");
       const confirmed = allBookings.filter((b: { status: string }) => b.status === "Confirmed");
       const checkedIn = allBookings.filter((b: { status: string }) => b.status === "CheckedIn");
       const completed = allBookings.filter((b: { status: string }) => b.status === "Completed");
       const cancelled = allBookings.filter((b: { status: string }) => b.status === "Cancelled");
-
-      console.log("[Admin Stats] Bookings by status:", {
-        pending: pending.length,
-        confirmed: confirmed.length,
-        checkedIn: checkedIn.length,
-        completed: completed.length,
-        cancelled: cancelled.length,
-      });
 
       // Calculate property stats
       const activeProperties = properties.filter((p: { isActive: boolean }) => p.isActive).length;
@@ -280,7 +261,6 @@ export function usePlatformStats() {
         },
       };
 
-      console.log("[Admin Stats] Final result:", result);
       return result;
     },
   });

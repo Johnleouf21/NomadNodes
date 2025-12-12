@@ -10,6 +10,7 @@ import { Star, MapPin, Home } from "lucide-react";
 import { formatAddress } from "@/lib/utils";
 import { useIPFSData } from "@/lib/hooks/property/useIPFSMetadata";
 import { getIPFSUrl } from "@/lib/utils/ipfs";
+import { usePonderReviews } from "@/hooks/usePonderReviews";
 import type { PropertyMetadata } from "@/lib/hooks/property/types";
 import type { PonderProperty } from "@/hooks/usePonderProperties";
 import type { PropertyWithMetadata } from "@/hooks/usePonderPropertiesWithMetadata";
@@ -28,14 +29,33 @@ export function PropertyCardPonder({ property }: PropertyCardPonderProps) {
   // Fetch metadata from IPFS
   const { data: metadata, isLoading } = useIPFSData<PropertyMetadata>(property.ipfsHash);
 
+  // Fetch reviews for this property to calculate rating excluding flagged
+  const { reviews: propertyReviews } = usePonderReviews({
+    propertyId: property.propertyId.toString(),
+    limit: 100,
+  });
+
   // Get first image URL or placeholder
   const coverImage = metadata?.images?.[0]
     ? getIPFSUrl(metadata.images[0])
     : "/placeholder-property.svg";
 
-  // Calculate rating (stored as basis points in contract)
-  const rating = Number(property.averageRating) / 100;
-  const reviews = Number(property.totalRatings);
+  // Calculate rating excluding flagged reviews
+  const { rating, reviews } = useMemo(() => {
+    const nonFlagged = propertyReviews.filter((r) => !r.isFlagged);
+    if (nonFlagged.length === 0) {
+      // Fallback to indexed data if no reviews loaded yet
+      return {
+        rating: Number(property.averageRating) / 100,
+        reviews: Number(property.totalRatings),
+      };
+    }
+    const avg = nonFlagged.reduce((sum, r) => sum + r.rating, 0) / nonFlagged.length;
+    return {
+      rating: avg,
+      reviews: nonFlagged.length,
+    };
+  }, [propertyReviews, property.averageRating, property.totalRatings]);
 
   // Display values
   const displayName = metadata?.name || `Property #${property.propertyId}`;
@@ -171,6 +191,12 @@ export function PropertyCardPonderWithMetadata({
 }: PropertyCardPonderWithMetadataProps) {
   const metadata = property.metadata;
 
+  // Fetch reviews for this property to calculate rating excluding flagged
+  const { reviews: propertyReviews } = usePonderReviews({
+    propertyId: property.propertyId.toString(),
+    limit: 100,
+  });
+
   // Get all image URLs
   const imageUrls = useMemo(() => {
     if (!metadata?.images || metadata.images.length === 0) {
@@ -179,9 +205,22 @@ export function PropertyCardPonderWithMetadata({
     return metadata.images.map((img) => getIPFSUrl(img));
   }, [metadata?.images]);
 
-  // Calculate rating (stored as basis points in contract)
-  const rating = Number(property.averageRating) / 100;
-  const reviews = Number(property.totalRatings);
+  // Calculate rating excluding flagged reviews
+  const { rating, reviews } = useMemo(() => {
+    const nonFlagged = propertyReviews.filter((r) => !r.isFlagged);
+    if (nonFlagged.length === 0) {
+      // Fallback to indexed data if no reviews loaded yet
+      return {
+        rating: Number(property.averageRating) / 100,
+        reviews: Number(property.totalRatings),
+      };
+    }
+    const avg = nonFlagged.reduce((sum, r) => sum + r.rating, 0) / nonFlagged.length;
+    return {
+      rating: avg,
+      reviews: nonFlagged.length,
+    };
+  }, [propertyReviews, property.averageRating, property.totalRatings]);
 
   // Display values - prefer IPFS metadata
   const displayName = metadata?.name || `Property #${property.propertyId}`;

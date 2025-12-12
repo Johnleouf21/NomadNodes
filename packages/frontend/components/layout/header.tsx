@@ -24,6 +24,7 @@ import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { LanguageSwitcher } from "@/components/shared/language-switcher";
 import { TokenBalanceDisplay } from "@/components/shared/token-balance-display";
 import { TokenFaucet } from "@/components/shared/token-faucet";
+import { NotificationBell } from "@/components/shared/notification-bell";
 import { useTranslation } from "@/lib/hooks/useTranslation";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { MessagingWidget } from "@/components/messaging";
@@ -128,9 +129,10 @@ export function Header() {
             </>
           )}
 
-          {/* Messaging Widget - Only show when connected with SBT */}
+          {/* Notifications & Messaging - Only show when connected with SBT */}
           {isConnected && hasAnySBT && (
-            <div className="hidden md:block">
+            <div className="hidden items-center gap-1 md:flex">
+              <NotificationBell />
               <MessagingWidget />
             </div>
           )}
@@ -317,6 +319,11 @@ export function Header() {
                 {/* Conditional mobile menu items */}
                 {isConnected && hasAnySBT && (
                   <>
+                    {/* Mobile Notification Bell */}
+                    <div className="flex items-center gap-2">
+                      <NotificationBell />
+                      <span className="text-lg font-medium">Notifications</span>
+                    </div>
                     <Link
                       href="/messages"
                       onClick={() => setIsOpen(false)}
