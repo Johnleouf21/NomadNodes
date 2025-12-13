@@ -388,6 +388,164 @@ describe("HostSBT", function () {
       expect(profile.averageResponseTime).to.be.lt(120);
     });
 
+    it("should return SuperHost tier (3) with 51+ bookings", async function () {
+      // Add 51 bookings received (51 is the threshold for SuperHost TIER)
+      for (let i = 0; i < 51; i++) {
+        await hostSBT.connect(authorizedUpdater).incrementBookingReceived(host1.address);
+      }
+      // Add reviews with avg rating >= 4.7 and response time <= 120min
+      for (let i = 0; i < 10; i++) {
+        await hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 5, 60);
+      }
+
+      const profile = await hostSBT.getProfile(host1.address);
+      // With 51+ bookings, rating >= 4.7, response <= 120: tier should be SuperHost (3)
+      expect(profile.tier).to.equal(3); // SuperHost tier
+      expect(profile.superHost).to.be.true;
+    });
+
+    it("should emit SuperHostAwarded event when achieving SuperHost", async function () {
+      const tokenId = await hostSBT.walletToTokenId(host1.address);
+
+      // Add 50 bookings first (meets booking requirement)
+      // Note: incrementBookingReceived does NOT update superHost status
+      for (let i = 0; i < 50; i++) {
+        await hostSBT.connect(authorizedUpdater).incrementBookingReceived(host1.address);
+      }
+
+      // Verify not yet SuperHost (incrementBookingReceived doesn't check SuperHost)
+      let profile = await hostSBT.getProfile(host1.address);
+      expect(profile.superHost).to.be.false;
+
+      // First good review triggers SuperHost check via updateReputation
+      // All criteria are met: 50 bookings, rating 5.0, responseTime 60, no cancellations
+      await expect(hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 5, 60))
+        .to.emit(hostSBT, "SuperHostAwarded")
+        .withArgs(host1.address, tokenId);
+
+      profile = await hostSBT.getProfile(host1.address);
+      expect(profile.superHost).to.be.true;
+    });
+
+    it("should emit SuperHostRevoked event when losing SuperHost status", async function () {
+      const tokenId = await hostSBT.walletToTokenId(host1.address);
+
+      // First achieve SuperHost
+      for (let i = 0; i < 50; i++) {
+        await hostSBT.connect(authorizedUpdater).incrementBookingReceived(host1.address);
+      }
+      for (let i = 0; i < 10; i++) {
+        await hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 5, 60);
+      }
+
+      let profile = await hostSBT.getProfile(host1.address);
+      expect(profile.superHost).to.be.true;
+
+      // Add first bad review - average is still >= 4.7
+      // Math: (10*500 + 1*200) / 11 = 5200/11 = 472.7 >= 470 ✓
+      await hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 2, 60);
+
+      profile = await hostSBT.getProfile(host1.address);
+      expect(profile.superHost).to.be.true; // Still SuperHost
+
+      // Second bad review drops average below 4.7 and revokes SuperHost
+      // Math: (10*500 + 2*200) / 12 = 5400/12 = 450 < 470 ✗
+      await expect(hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 2, 60))
+        .to.emit(hostSBT, "SuperHostRevoked")
+        .withArgs(host1.address, tokenId);
+
+      profile = await hostSBT.getProfile(host1.address);
+      expect(profile.superHost).to.be.false;
+    });
+
+    it("should verify SuperHost status via incrementCompletedBooking", async function () {
+      // Setup: 50 bookings received + good reviews to meet criteria
+      for (let i = 0; i < 50; i++) {
+        await hostSBT.connect(authorizedUpdater).incrementBookingReceived(host1.address);
+      }
+      for (let i = 0; i < 10; i++) {
+        await hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 5, 60);
+      }
+
+      let profile = await hostSBT.getProfile(host1.address);
+      expect(profile.superHost).to.be.true;
+      expect(profile.tier).to.equal(2); // Pro tier (SuperHost is a separate flag)
+
+      // incrementCompletedBooking also recalculates SuperHost
+      // Add a completed booking - should maintain SuperHost
+      await hostSBT.connect(authorizedUpdater).incrementCompletedBooking(host1.address);
+
+      profile = await hostSBT.getProfile(host1.address);
+      expect(profile.superHost).to.be.true;
+      expect(profile.completedBookings).to.equal(1);
+    });
+
+    it("should emit SuperHostAwarded via incrementCompletedBooking", async function () {
+      const tokenId = await hostSBT.walletToTokenId(host1.address);
+
+      // Setup: 49 bookings received + good reviews
+      // This won't trigger SuperHost because < 50 bookings
+      for (let i = 0; i < 49; i++) {
+        await hostSBT.connect(authorizedUpdater).incrementBookingReceived(host1.address);
+      }
+      for (let i = 0; i < 10; i++) {
+        await hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 5, 60);
+      }
+
+      let profile = await hostSBT.getProfile(host1.address);
+      expect(profile.superHost).to.be.false; // Not yet SuperHost (only 49 bookings)
+
+      // Add 50th booking - incrementBookingReceived doesn't check SuperHost
+      await hostSBT.connect(authorizedUpdater).incrementBookingReceived(host1.address);
+
+      profile = await hostSBT.getProfile(host1.address);
+      expect(profile.superHost).to.be.false; // Still not SuperHost (incrementBookingReceived doesn't update it)
+
+      // Now incrementCompletedBooking triggers SuperHost check
+      await expect(hostSBT.connect(authorizedUpdater).incrementCompletedBooking(host1.address))
+        .to.emit(hostSBT, "SuperHostAwarded")
+        .withArgs(host1.address, tokenId);
+
+      profile = await hostSBT.getProfile(host1.address);
+      expect(profile.superHost).to.be.true;
+    });
+
+    it("should restore SuperHost via incrementCompletedBooking after unsuspend", async function () {
+      const tokenId = await hostSBT.walletToTokenId(host1.address);
+
+      // Setup: Achieve SuperHost status
+      for (let i = 0; i < 50; i++) {
+        await hostSBT.connect(authorizedUpdater).incrementBookingReceived(host1.address);
+      }
+      for (let i = 0; i < 10; i++) {
+        await hostSBT.connect(authorizedUpdater).updateReputation(host1.address, 5, 60);
+      }
+
+      let profile = await hostSBT.getProfile(host1.address);
+      expect(profile.superHost).to.be.true;
+
+      // Suspend host - this revokes SuperHost
+      await hostSBT.suspendHost(host1.address);
+      profile = await hostSBT.getProfile(host1.address);
+      expect(profile.superHost).to.be.false;
+      expect(profile.suspended).to.be.true;
+
+      // Unsuspend host - this does NOT restore SuperHost automatically
+      await hostSBT.unsuspendHost(host1.address);
+      profile = await hostSBT.getProfile(host1.address);
+      expect(profile.superHost).to.be.false; // Still false!
+      expect(profile.suspended).to.be.false;
+
+      // Now incrementCompletedBooking recalculates SuperHost
+      // All criteria are met again, so it should emit SuperHostAwarded
+      await expect(hostSBT.connect(authorizedUpdater).incrementCompletedBooking(host1.address))
+        .to.emit(hostSBT, "SuperHostAwarded")
+        .withArgs(host1.address, tokenId);
+
+      profile = await hostSBT.getProfile(host1.address);
+      expect(profile.superHost).to.be.true;
+    });
+
     it("should revoke SuperHost on low rating", async function () {
       // First get SuperHost status
       for (let i = 0; i < 50; i++) {

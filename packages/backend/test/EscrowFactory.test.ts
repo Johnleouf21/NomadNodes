@@ -547,6 +547,54 @@ describe("EscrowFactory", function () {
         })
       ).to.be.revertedWithCustomError(escrowFactory, "InvalidAddress");
     });
+
+    it("should revert if propertyNFT not configured", async function () {
+      // Deploy a new EscrowFactory without setting propertyNFT
+      const EscrowFactoryContract = await ethers.getContractFactory("EscrowFactory");
+      const newEscrowFactory = (await EscrowFactoryContract.deploy(
+        platform.address,
+        admin.address,
+        backendSigner.address,
+        await usdc.getAddress(),
+        await eurc.getAddress()
+      )) as unknown as EscrowFactory;
+      await newEscrowFactory.waitForDeployment();
+
+      // Set other dependencies but NOT propertyNFT
+      await newEscrowFactory.setEscrowRegistry(await escrowRegistry.getAddress());
+      await newEscrowFactory.setEscrowDeployer(await escrowDeployer.getAddress());
+
+      const price = BigInt(320_000000);
+      const validUntil = (await time.latest()) + 3600;
+      const quantity = 2;
+
+      const signature = await signQuote(
+        tokenId,
+        checkIn,
+        checkOut,
+        price,
+        await usdc.getAddress(),
+        validUntil,
+        quantity,
+        await newEscrowFactory.getAddress()
+      );
+
+      await usdc.connect(traveler).approve(await newEscrowFactory.getAddress(), price);
+
+      // Should revert because propertyNFT is not set (zero address)
+      await expect(
+        newEscrowFactory.connect(traveler).createTravelEscrowWithQuote({
+          tokenId,
+          checkIn,
+          checkOut,
+          price,
+          currency: await usdc.getAddress(),
+          validUntil,
+          quantity,
+          signature,
+        })
+      ).to.be.revertedWithCustomError(newEscrowFactory, "InvalidAddress");
+    });
   });
 
   describe("Additional View Functions", function () {

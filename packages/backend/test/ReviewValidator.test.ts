@@ -513,5 +513,32 @@ describe("ReviewValidator", function () {
       const page3 = await reviewValidator.getPendingReviews(15, 5);
       expect(page3.length).to.equal(0);
     });
+
+    it("should check hasReviewed for escrow by direction", async function () {
+      const escrowId = 100;
+
+      // Initially not reviewed
+      expect(await reviewValidator.hasReviewed(escrowId, true)).to.be.false;
+      expect(await reviewValidator.hasReviewed(escrowId, false)).to.be.false;
+
+      // Submit traveler-to-host review
+      await reviewValidator
+        .connect(traveler)
+        .submitReview(escrowId, 1, 0, host.address, 5, "ipfs://", true);
+
+      // Now traveler-to-host direction is marked as reviewed
+      expect(await reviewValidator.hasReviewed(escrowId, true)).to.be.true;
+      expect(await reviewValidator.hasReviewed(escrowId, false)).to.be.false;
+
+      // Submit host-to-traveler review (different escrow to avoid AlreadyReviewed)
+      const escrowId2 = 101;
+      await reviewValidator
+        .connect(host)
+        .submitReview(escrowId2, 1, 1, traveler.address, 4, "ipfs://", false);
+
+      // Now host-to-traveler direction is marked as reviewed for escrowId2
+      expect(await reviewValidator.hasReviewed(escrowId2, false)).to.be.true;
+      expect(await reviewValidator.hasReviewed(escrowId2, true)).to.be.false;
+    });
   });
 });
