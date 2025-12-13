@@ -15,7 +15,7 @@ const MATRIX_CHARS =
 const BOOT_LINES = [
   { text: "$ initializing nomad_nodes.system...", delay: 0 },
   { text: "[OK] Loading React 19...", delay: 400 },
-  { text: "[OK] Next.js 15 framework ready", delay: 700 },
+  { text: "[OK] Next.js 16 framework ready", delay: 700 },
   { text: "[OK] TypeScript compiler initialized", delay: 1000 },
   { text: "[OK] Web3 provider connected", delay: 1300 },
   { text: "[OK] Solidity contracts deployed", delay: 1600 },
