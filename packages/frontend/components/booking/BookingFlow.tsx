@@ -9,7 +9,7 @@ import { useAccount } from "wagmi";
 
 // Steps
 import { DateSelectionStep } from "./DateSelectionStep";
-import { GuestsStep } from "./GuestsStep";
+import { GuestsStep } from "./guests-step";
 import { PaymentStep } from "./PaymentStep";
 import { ReviewStep } from "./ReviewStep";
 

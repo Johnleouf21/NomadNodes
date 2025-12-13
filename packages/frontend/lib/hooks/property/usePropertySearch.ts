@@ -9,7 +9,7 @@
 import { useReadContract } from "wagmi";
 import { CONTRACTS } from "@/lib/contracts";
 import { useMemo } from "react";
-import { getStartOfDayTimestamp } from "./useAvailability";
+import { getStartOfDayTimestamp } from "./availability";
 
 /**
  * Get total property count from PropertyRegistry

@@ -7,7 +7,7 @@ import * as React from "react";
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { CONTRACTS } from "@/lib/contracts";
 import type { Address } from "viem";
-import { getStartOfDayTimestamp } from "./useAvailability";
+import { getStartOfDayTimestamp } from "./availability";
 
 /*//////////////////////////////////////////////////////////////
                               TYPES

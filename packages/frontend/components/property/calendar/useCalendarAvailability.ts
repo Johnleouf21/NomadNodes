@@ -5,7 +5,7 @@
 
 import * as React from "react";
 import { usePublicClient } from "wagmi";
-import { getStartOfDayTimestamp } from "@/lib/hooks/property/useAvailability";
+import { getStartOfDayTimestamp } from "@/lib/hooks/property/availability";
 import { CONTRACTS } from "@/lib/contracts";
 
 // Simple in-memory cache for availability data

@@ -10,7 +10,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { cn } from "@/lib/utils";
 import { format, differenceInDays } from "date-fns";
 import { toast } from "sonner";
-import { useCalendarAvailability } from "@/lib/hooks/property/useAvailability";
+import { useCalendarAvailability } from "@/lib/hooks/property/availability";
 import type { DateRange } from "react-day-picker";
 
 interface DateSelectionStepProps {

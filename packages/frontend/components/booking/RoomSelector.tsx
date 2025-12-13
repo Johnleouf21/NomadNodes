@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { usePonderRoomTypes, RoomTypeWithMeta_data } from "@/hooks/usePonderRoomTypes";
-import { useCheckMultipleAvailability } from "@/lib/hooks/property/useAvailability";
+import { useCheckMultipleAvailability } from "@/lib/hooks/property/availability";
 import { cn } from "@/lib/utils";
 import type { BookingRoom } from "@/lib/store/useBookingStore";
 
