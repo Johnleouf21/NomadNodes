@@ -65,7 +65,7 @@ export default function ExplorePage() {
       {/* Hero Search Section */}
       <div className="from-primary/10 to-background bg-gradient-to-b py-12">
         <div className="container px-4">
-          <div className="mx-auto max-w-4xl space-y-4">
+          <div className="mx-auto max-w-5xl space-y-4">
             <h1 className="text-4xl font-bold tracking-tight">Explore Properties</h1>
             <p className="text-muted-foreground text-lg">
               Discover unique stays powered by blockchain

@@ -2,19 +2,28 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Twitter, Mail } from "lucide-react";
+import { Mail, X } from "lucide-react";
 import { useTranslation } from "@/lib/hooks/useTranslation";
 import { Separator } from "@/components/ui/separator";
+import { AdminSecretAccess } from "@/components/easter-eggs/admin-secret-access";
 
 export function Footer() {
   const { t } = useTranslation();
 
   const footerSections = [
     {
-      title: "Platform",
+      title: t("footer.platform"),
       links: [
         { label: t("nav.explore"), href: "/explore" },
-        { label: t("footer.host_home"), href: "/host" },
+        { label: t("footer.how_it_works"), href: "/#how-it-works" },
+        { label: t("footer.faq"), href: "/faq" },
+      ],
+    },
+    {
+      title: t("footer.get_started"),
+      links: [
+        { label: t("footer.become_traveler"), href: "/onboarding" },
+        { label: t("footer.become_host"), href: "/onboarding" },
       ],
     },
     {
@@ -27,22 +36,24 @@ export function Footer() {
   ];
 
   const socialLinks = [
-    { icon: Twitter, href: "https://x.com/nomad_nodes", label: "X (Twitter)" },
-    { icon: Mail, href: "mailto:contact@nomadnodes.xyz", label: "Email" },
+    { icon: X, href: "https://x.com/nomad_nodes", label: "X (Twitter)" },
+    { icon: Mail, href: "mailto:contact@nomadnodes.com", label: "Email" },
   ];
 
   return (
     <footer className="bg-background border-t">
       <div className="container px-4 py-10">
-        <div className="grid gap-8 md:grid-cols-4">
+        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-5">
           {/* Brand Section */}
-          <div className="md:col-span-2">
-            <Link href="/" className="mb-3 inline-block">
-              <h3 className="font-heading text-foreground text-2xl font-bold tracking-tight">
-                <span className="text-primary">✦</span>Nomad Nodes
-                <span className="text-primary">✦</span>
-              </h3>
-            </Link>
+          <div className="md:col-span-2 lg:col-span-2">
+            <AdminSecretAccess>
+              <Link href="/" className="mb-3 inline-block">
+                <h3 className="font-heading text-foreground text-2xl font-bold tracking-tight">
+                  <span className="text-primary">✦</span>Nomad Nodes
+                  <span className="text-primary">✦</span>
+                </h3>
+              </Link>
+            </AdminSecretAccess>
             <p className="text-muted-foreground mb-4 max-w-sm text-sm">{t("footer.tagline")}</p>
             <div className="flex items-center gap-3">
               {socialLinks.map((social) => {

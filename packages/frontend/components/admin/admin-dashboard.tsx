@@ -29,7 +29,7 @@ import {
   useReviewCounter,
   ReviewStatus,
   type PendingReviewData,
-} from "@/lib/hooks/contracts/useAdminReviews";
+} from "@/lib/hooks/contracts/adminReviews";
 import { usePlatformStats } from "@/lib/hooks/contracts/useAdminPlatform";
 
 import { PlatformOverviewTab } from "./overview-tab";

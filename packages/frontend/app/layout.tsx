@@ -9,6 +9,11 @@ import { PonderClientProvider } from "@/lib/ponder-provider";
 import ContextProvider from "@/context";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
+import { ChatWidget } from "@/components/chat/chat-widget";
+import { ScrollToTop } from "@/components/ui/scroll-to-top";
+import { PageTransition } from "@/components/providers/page-transition";
+import { GuillaumeEasterEgg } from "@/components/easter-eggs/guillaume-easter-egg";
+import { JohnleoufEasterEgg } from "@/components/easter-eggs/johnleouf-easter-egg";
 
 // Syne for titles - Bold, innovative, "Tech-Couture" feel
 const syne = Syne({
@@ -133,10 +138,16 @@ export default async function RootLayout({
             <PonderClientProvider>
               <div className="relative flex min-h-screen flex-col">
                 <Header />
-                <main className="flex-1">{children}</main>
+                <main className="flex-1">
+                  <PageTransition>{children}</PageTransition>
+                </main>
                 <Footer />
               </div>
               <Toaster richColors position="top-right" />
+              <ChatWidget />
+              <ScrollToTop />
+              <GuillaumeEasterEgg />
+              <JohnleoufEasterEgg />
             </PonderClientProvider>
           </ContextProvider>
         </ThemeProvider>

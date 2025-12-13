@@ -44,7 +44,7 @@ export function HowItWorks() {
   const [isVisible, setIsVisible] = React.useState(false);
 
   return (
-    <section ref={refCallback} className="py-16 md:py-24">
+    <section id="how-it-works" ref={refCallback} className="scroll-mt-20 py-16 md:py-24">
       <div className="container px-4">
         <div
           className={`mx-auto max-w-3xl text-center transition-all duration-700 ${isVisible ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}
@@ -72,8 +72,8 @@ export function HowItWorks() {
                   <div className="bg-primary/10 group-hover:bg-primary/20 mb-4 flex h-16 w-16 items-center justify-center rounded-full transition-all duration-300 group-hover:scale-110">
                     <Icon className="text-primary h-8 w-8 transition-transform duration-300 group-hover:rotate-12" />
                   </div>
-                  <div className="text-muted-foreground mb-2 text-sm font-semibold">
-                    {t("common.next")} {index + 1}
+                  <div className="text-primary/70 mb-2 text-xs font-bold tracking-wider uppercase">
+                    {t("how_it_works.step")} {index + 1}
                   </div>
                   <h3 className="mb-3 text-xl font-bold">{t(`how_it_works.${step.key}_title`)}</h3>
                   <p className="text-muted-foreground text-sm">

@@ -671,4 +671,109 @@ describe("BookingManager", function () {
       ).to.be.revertedWithCustomError(bookingManager, "NotEscrowFactory");
     });
   });
+
+  describe("HostSBT Integration", function () {
+    beforeEach(async function () {
+      // Set HostSBT on BookingManager
+      await bookingManager.setHostSBT(await hostSBT.getAddress());
+      // Authorize BookingManager to update HostSBT
+      await hostSBT.setAuthorizedUpdater(await bookingManager.getAddress(), true);
+    });
+
+    it("should set hostSBT address", async function () {
+      expect(await bookingManager.hostSBT()).to.equal(await hostSBT.getAddress());
+    });
+
+    it("should revert setHostSBT with zero address", async function () {
+      await expect(bookingManager.setHostSBT(ethers.ZeroAddress)).to.be.revertedWithCustomError(
+        bookingManager,
+        "InvalidAddress"
+      );
+    });
+
+    it("should increment host booking received on confirm", async function () {
+      // Create and confirm booking
+      await bookingManager
+        .connect(traveler)
+        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address);
+
+      const profileBefore = await hostSBT.getProfile(host.address);
+      await bookingManager.connect(owner).confirmBooking(tokenId, 0);
+      const profileAfter = await hostSBT.getProfile(host.address);
+
+      expect(profileAfter.totalBookingsReceived).to.equal(profileBefore.totalBookingsReceived + 1n);
+    });
+
+    it("should increment host completed booking on complete", async function () {
+      // Create, confirm, check-in booking
+      await bookingManager
+        .connect(traveler)
+        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address);
+      await bookingManager.connect(owner).confirmBooking(tokenId, 0);
+      await bookingManager.connect(host).checkInBooking(tokenId, 0);
+
+      const profileBefore = await hostSBT.getProfile(host.address);
+      await bookingManager.connect(host).completeBooking(tokenId, 0);
+      const profileAfter = await hostSBT.getProfile(host.address);
+
+      expect(profileAfter.completedBookings).to.equal(profileBefore.completedBookings + 1n);
+    });
+
+    it("should record host cancellation when host cancels confirmed booking", async function () {
+      // Create and confirm booking
+      await bookingManager
+        .connect(traveler)
+        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address);
+      await bookingManager.connect(owner).confirmBooking(tokenId, 0);
+
+      const profileBefore = await hostSBT.getProfile(host.address);
+      await bookingManager.connect(host).cancelBooking(tokenId, 0);
+      const profileAfter = await hostSBT.getProfile(host.address);
+
+      expect(profileAfter.cancellationsByHost).to.equal(profileBefore.cancellationsByHost + 1n);
+    });
+
+    it("should not record host cancellation when traveler cancels", async function () {
+      // Create and confirm booking
+      await bookingManager
+        .connect(traveler)
+        .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address);
+      await bookingManager.connect(owner).confirmBooking(tokenId, 0);
+
+      const profileBefore = await hostSBT.getProfile(host.address);
+      await bookingManager.connect(traveler).cancelBooking(tokenId, 0);
+      const profileAfter = await hostSBT.getProfile(host.address);
+
+      // Host cancellations should not change when traveler cancels
+      expect(profileAfter.cancellationsByHost).to.equal(profileBefore.cancellationsByHost);
+    });
+  });
+
+  describe("PropertyNFTAdapter Integration", function () {
+    it("should revert if adapter calls with zero traveler address", async function () {
+      // Set an adapter address
+      await bookingManager.setPropertyNFTAdapter(platform.address);
+
+      // Call bookRoom from the adapter with zero address for _traveler
+      await expect(
+        bookingManager
+          .connect(platform) // platform is set as adapter
+          .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, ethers.ZeroAddress)
+      ).to.be.revertedWithCustomError(bookingManager, "InvalidAddress");
+    });
+
+    it("should allow adapter to book on behalf of traveler", async function () {
+      // Set platform as adapter
+      await bookingManager.setPropertyNFTAdapter(platform.address);
+
+      // Adapter books on behalf of traveler
+      await expect(
+        bookingManager
+          .connect(platform)
+          .bookRoom(tokenId, checkIn, checkOut, 2, ethers.ZeroAddress, traveler.address)
+      )
+        .to.emit(bookingManager, "BookingCreated")
+        .withArgs(tokenId, 0, traveler.address, checkIn, checkOut, 320);
+    });
+  });
 });

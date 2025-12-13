@@ -59,7 +59,7 @@ export {
   useGetDayAvailability, // deprecated, use useGetAvailableUnits
   getStartOfDayTimestamp,
   getEndOfDayTimestamp,
-} from "./useAvailability";
+} from "./availability";
 
 // IPFS metadata hooks
 export * from "./useIPFSMetadata";

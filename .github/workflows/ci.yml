@@ -89,21 +89,7 @@ jobs:
         run: pnpm --filter @nomad-nodes/backend compile
 
       - name: Run contract tests
-        run: pnpm --filter @nomad-nodes/backend test
-
-      - name: Generate coverage report
-        run: pnpm --filter @nomad-nodes/backend test:coverage
-        continue-on-error: true
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        if: ${{ always() && github.event.repository.private == false }}
-        continue-on-error: true
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          directory: ./packages/backend/coverage
-          flags: smart-contracts
-          fail_ci_if_error: false
+        run: pnpm --filter @nomad-nodes/backend test --coverage
 
   build:
     name: Build All Packages
