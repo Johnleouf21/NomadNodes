@@ -197,31 +197,31 @@ export default function BookingPage() {
 
   return (
     <div className="container py-8">
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <Button variant="ghost" onClick={() => router.push(`/property/${propertyId}`)}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Property
-        </Button>
-      </div>
+      <div className="mx-auto max-w-4xl">
+        {/* Header */}
+        <div className="mb-6">
+          <Button variant="ghost" onClick={() => router.push(`/property/${propertyId}`)}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Property
+          </Button>
+        </div>
 
-      {/* Property Header */}
-      <div className="mb-8">
-        <h1 className="mb-2 text-3xl font-bold">Book {roomName}</h1>
-        <p className="text-muted-foreground">
-          {propertyName} • {location}
-        </p>
-        {pricePerNight > 0 && (
-          <p className="mt-2 text-lg font-semibold">
-            {currency === "EUR" ? "€" : "$"}
-            {pricePerNight.toFixed(2)}{" "}
-            <span className="text-muted-foreground text-sm font-normal">per night</span>
+        {/* Property Header */}
+        <div className="mb-8">
+          <h1 className="mb-2 text-3xl font-bold">Book {roomName}</h1>
+          <p className="text-muted-foreground">
+            {propertyName} • {location}
           </p>
-        )}
-      </div>
+          {pricePerNight > 0 && (
+            <p className="mt-2 text-lg font-semibold">
+              {currency === "EUR" ? "€" : "$"}
+              {pricePerNight.toFixed(2)}{" "}
+              <span className="text-muted-foreground text-sm font-normal">per night</span>
+            </p>
+          )}
+        </div>
 
-      {/* Booking Flow */}
-      <div className="mx-auto max-w-3xl">
+        {/* Booking Flow */}
         <BookingFlow
           tokenId={tokenId}
           propertyId={propertyId}

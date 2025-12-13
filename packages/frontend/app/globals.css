@@ -157,3 +157,122 @@
     font-weight: 700;
   }
 }
+
+/* Center container by default - outside layer for higher specificity */
+.container {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Animated gradient for 404 page */
+@keyframes gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-gradient {
+  animation: gradient 3s ease infinite;
+}
+
+/* Page transition animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-page-enter {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Easter egg bounce-in animation */
+@keyframes bounceIn {
+  0% { opacity: 0; transform: scale(0.3); }
+  50% { transform: scale(1.05); }
+  70% { transform: scale(0.9); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.animate-bounce-in {
+  animation: bounceIn 0.5s ease-out;
+}
+
+/* Confetti animation for Konami code */
+@keyframes confetti {
+  0% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(100vh) rotate(720deg);
+  }
+}
+
+.animate-confetti {
+  animation: confetti 3s ease-out forwards;
+}
+
+/* Matrix rain animation for Johnleouf easter egg */
+@keyframes matrix-fall {
+  0% {
+    transform: translateY(-100%);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh);
+    opacity: 0;
+  }
+}
+
+.animate-matrix-fall {
+  animation: matrix-fall linear infinite;
+}
+
+/* Fade in animation */
+@keyframes fadeInEaster {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeInEaster 0.5s ease-out;
+}
+
+/* Glitch effect */
+@keyframes glitch {
+  0% { transform: translate(0); }
+  20% { transform: translate(-2px, 2px); }
+  40% { transform: translate(-2px, -2px); }
+  60% { transform: translate(2px, 2px); }
+  80% { transform: translate(2px, -2px); }
+  100% { transform: translate(0); }
+}
+
+/* Floating travel icons for Adélie easter egg */
+@keyframes float-travel {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg) scale(1);
+    opacity: 0.4;
+  }
+  25% {
+    transform: translateY(-20px) rotate(10deg) scale(1.1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-40px) rotate(-5deg) scale(1);
+    opacity: 0.4;
+  }
+  75% {
+    transform: translateY(-20px) rotate(5deg) scale(1.1);
+    opacity: 0.6;
+  }
+}
+
+.animate-float-travel {
+  animation: float-travel ease-in-out infinite;
+}

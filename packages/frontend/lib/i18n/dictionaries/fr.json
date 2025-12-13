@@ -15,6 +15,13 @@
     "submit": "Soumettre",
     "save": "Enregistrer"
   },
+  "error": {
+    "404_title": "Perdu au paradis ?",
+    "404_description": "Cette page semble être partie en vacances. On vous remet sur la bonne voie !",
+    "back_home": "Retour à l'accueil",
+    "explore": "Explorer les propriétés",
+    "go_back": "Retour"
+  },
   "nav": {
     "home": "Accueil",
     "explore": "Explorer",
@@ -37,6 +44,7 @@
   "how_it_works": {
     "title": "Comment Ça Marche",
     "subtitle": "Vivez une expérience de location fluide sur la blockchain",
+    "step": "Étape",
     "step1_title": "Connectez Votre Portefeuille",
     "step1_desc": "Liez votre portefeuille Web3 pour commencer. Pas d'email ni de long processus d'inscription requis.",
     "step2_title": "Explorez & Réservez",
@@ -61,6 +69,14 @@
     "feature5_desc": "Construisez une réputation on-chain vérifiable grâce aux accomplissements Soulbound Token.",
     "feature6_title": "Séquestre Intelligent",
     "feature6_desc": "Protection automatique des paiements avec résolution de litiges programmable."
+  },
+  "stats": {
+    "title": "La Confiance de la Communauté",
+    "subtitle": "Statistiques en temps réel de notre plateforme décentralisée",
+    "properties": "Propriétés",
+    "users": "Utilisateurs",
+    "bookings": "Séjours Complétés",
+    "reviews": "Avis Vérifiés"
   },
   "property": {
     "type": "Type de Propriété",
@@ -132,6 +148,12 @@
   },
   "footer": {
     "tagline": "L'avenir des locations de vacances est décentralisé",
+    "platform": "Plateforme",
+    "how_it_works": "Comment ça Marche",
+    "faq": "FAQ",
+    "get_started": "Commencer",
+    "become_traveler": "Devenir Voyageur",
+    "become_host": "Devenir Hôte",
     "company": "Entreprise",
     "about": "À Propos",
     "careers": "Carrières",
@@ -307,5 +329,112 @@
     "error_room_guests": "Doit accueillir au moins 1 voyageur",
     "error_add_room": "Veuillez ajouter au moins un type de chambre",
     "error_add_photo": "Veuillez ajouter au moins une photo"
+  },
+  "faq": {
+    "title": "Questions Fréquentes",
+    "subtitle": "Tout ce que vous devez savoir sur NomadNodes",
+    "still_questions": "Encore des questions ?",
+    "contact_text": "Nous sommes là pour vous aider. Contactez-nous à tout moment.",
+    "categories": {
+      "general": "Général",
+      "blockchain": "Blockchain & Web3",
+      "booking": "Réservation",
+      "hosting": "Hébergement",
+      "security": "Sécurité & Confiance"
+    },
+    "general": {
+      "q1": "Qu'est-ce que NomadNodes ?",
+      "a1": "NomadNodes est une plateforme de location de vacances décentralisée construite sur la blockchain. Nous connectons directement les voyageurs aux hôtes, éliminant les intermédiaires et réduisant les frais tout en garantissant des transactions transparentes et sécurisées.",
+      "q2": "En quoi NomadNodes est-il différent des plateformes traditionnelles ?",
+      "a2": "Contrairement aux plateformes traditionnelles, NomadNodes utilise des smart contracts pour des paiements sécurisés, des Soulbound Tokens (SBT) pour des avis vérifiés, et fonctionne avec des frais réduits puisqu'il n'y a pas d'intermédiaire central prélevant une grande commission.",
+      "q3": "Ai-je besoin de cryptomonnaie pour utiliser NomadNodes ?",
+      "a3": "Oui, les paiements sont effectués en USDC ou EURC (stablecoins indexés sur le dollar et l'euro) sur la blockchain Base. Cela garantit des transactions rapides et peu coûteuses tout en maintenant la stabilité des prix."
+    },
+    "blockchain": {
+      "q1": "Qu'est-ce qu'un wallet et pourquoi en ai-je besoin ?",
+      "a1": "Un portefeuille crypto (comme MetaMask ou Coinbase Wallet) est votre identité numérique sur la blockchain. Il vous permet de signer des transactions en toute sécurité et de gérer vos fonds sans partager d'informations personnelles.",
+      "q2": "Que sont les Soulbound Tokens (SBT) ?",
+      "a2": "Les SBT sont des tokens non transférables qui servent d'identité sur la plateforme. Vous avez besoin d'un SBT Voyageur ou SBT Hôte (obtenu lors de l'onboarding) pour utiliser NomadNodes. Après chaque séjour complété, les avis sont liés à votre SBT, construisant votre réputation on-chain.",
+      "q3": "Comment fonctionne le système d'escrow ?",
+      "a3": "Notre smart contract d'escrow conserve votre paiement en sécurité jusqu'à la confirmation du check-in. Cela protège les voyageurs (fonds en sécurité jusqu'à l'arrivée) et les hôtes (paiement garanti pour les séjours confirmés).",
+      "q4": "Quelle blockchain NomadNodes utilise-t-il ?",
+      "a4": "NomadNodes fonctionne sur Base, une blockchain Layer 2 d'Ethereum. Cela signifie des transactions rapides, des frais réduits (généralement moins de 0,01$) et la sécurité du réseau Ethereum."
+    },
+    "booking": {
+      "q1": "Comment faire une réservation ?",
+      "a1": "D'abord, connectez votre wallet et complétez l'onboarding pour obtenir votre SBT Voyageur. Ensuite parcourez les propriétés, sélectionnez vos dates et type de chambre, puis confirmez votre réservation. Le paiement est conservé en escrow jusqu'à ce que l'hôte confirme votre check-in.",
+      "q2": "Quels modes de paiement sont acceptés ?",
+      "a2": "Nous acceptons les stablecoins USDC et EURC sur le réseau Base. Vous pouvez les acquérir via des exchanges comme Coinbase ou utiliser un bridge depuis d'autres réseaux.",
+      "q3": "Puis-je annuler ma réservation ?",
+      "a3": "Oui, les politiques d'annulation varient selon la propriété. Vérifiez les conditions d'annulation spécifiques avant de réserver. Les remboursements sont traités automatiquement via le smart contract.",
+      "q4": "Comment laisser un avis ?",
+      "a4": "Après votre séjour terminé, vous pouvez laisser un avis vérifié qui est lié à votre SBT Voyageur. Ces avis sont stockés de façon permanente on-chain et ne peuvent pas être falsifiés car ils prouvent que vous avez réellement effectué le séjour."
+    },
+    "hosting": {
+      "q1": "Comment devenir hôte ?",
+      "a1": "Connectez votre wallet, obtenez votre SBT Hôte via notre processus d'onboarding, puis créez votre première annonce. Vous pouvez ajouter plusieurs types de chambres, des photos et définir vos propres prix.",
+      "q2": "Quels frais NomadNodes facture-t-il ?",
+      "a2": "Nous facturons 5% de frais de plateforme sur les réservations complétées, nettement moins que les plateformes traditionnelles (qui facturent souvent 15-20%). Les hôtes reçoivent les paiements directement dans leur wallet.",
+      "q3": "Quand suis-je payé ?",
+      "a3": "Le paiement est libéré de l'escrow lorsque vous confirmez le check-in du voyageur, ou automatiquement après le check-out si non confirmé avant. Les fonds vont directement dans votre wallet."
+    },
+    "security": {
+      "q1": "Mon paiement est-il sécurisé ?",
+      "a1": "Absolument. Les paiements sont conservés dans des smart contracts audités, pas par NomadNodes. Vos fonds sont protégés par la sécurité blockchain et ne sont libérés que selon les règles de l'escrow.",
+      "q2": "Les avis sont-ils fiables ?",
+      "a2": "Oui ! Contrairement aux plateformes traditionnelles où les faux avis sont courants, nos avis sont liés aux SBT Voyageur et ne peuvent être soumis qu'après avoir complété un séjour réel. Cela garantit que chaque avis est authentique et vérifiable on-chain.",
+      "q3": "Que se passe-t-il en cas de litige ?",
+      "a3": "Notre plateforme inclut des outils de modération pour la résolution des litiges. Les avis signalés sont examinés par des modérateurs, et notre système d'escrow dispose de garanties pour les deux parties."
+    }
+  },
+  "chat": {
+    "title": "Besoin d'aide ?",
+    "subtitle": "Trouvez des logements ou obtenez des réponses",
+    "back": "Retour",
+    "more_faq": "Voir toute la FAQ",
+    "explore_themes": "Explorer par thème",
+    "quick_questions": "Questions fréquentes",
+    "get_started": "Commencer",
+    "explore": "Explorer",
+    "themes": {
+      "beach": "Plage",
+      "mountain": "Montagne",
+      "city": "Ville",
+      "nature": "Nature"
+    },
+    "questions": {
+      "what_is_sbt": "Qu'est-ce qu'un SBT et pourquoi en ai-je besoin ?",
+      "how_to_book": "Comment faire une réservation ?",
+      "payment_methods": "Quels modes de paiement sont acceptés ?",
+      "how_reviews_work": "Comment fonctionnent les avis ?"
+    },
+    "answers": {
+      "what_is_sbt": "Un SBT (Soulbound Token) est votre identité numérique sur NomadNodes. Vous l'obtenez lors de l'onboarding - soit un SBT Voyageur pour réserver, soit un SBT Hôte pour publier des annonces. Il est non transférable et construit votre réputation on-chain via les avis vérifiés.",
+      "how_to_book": "1. Connectez votre wallet et complétez l'onboarding pour obtenir votre SBT Voyageur. 2. Parcourez les propriétés et sélectionnez vos dates. 3. Confirmez votre réservation - le paiement est conservé en escrow jusqu'à la confirmation du check-in par l'hôte.",
+      "payment_methods": "Nous acceptons les stablecoins USDC et EURC sur le réseau Base. Ce sont des cryptomonnaies stables indexées sur le dollar et l'euro, garantissant que la valeur de votre paiement ne fluctue pas.",
+      "how_reviews_work": "Après un séjour complété, vous pouvez laisser un avis vérifié lié à votre SBT Voyageur. Ces avis sont stockés de façon permanente on-chain et prouvent que vous avez réellement séjourné dans la propriété - aucun faux avis possible !"
+    }
+  },
+  "testimonials": {
+    "title": "Ce que dit notre communauté",
+    "subtitle": "Expériences réelles de voyageurs et d'hôtes utilisant NomadNodes",
+    "reviews": {
+      "1": {
+        "name": "Alex M.",
+        "role": "Digital Nomad",
+        "text": "Enfin une plateforme où je sais que les avis sont vrais ! La vérification blockchain me donne confiance lors de mes réservations. Et les frais sont bien plus bas que les plateformes traditionnelles."
+      },
+      "2": {
+        "name": "Sarah L.",
+        "role": "Hôte",
+        "text": "En tant qu'hôte, j'adore être payée directement sur mon wallet. Pas besoin d'attendre des semaines pour les virements. Le système d'escrow me protège ainsi que mes voyageurs. Révolutionnaire !"
+      },
+      "3": {
+        "name": "Marco T.",
+        "role": "Crypto Enthousiaste",
+        "text": "Pouvoir payer en stablecoins en voyage, c'est incroyable. Pas de frais de change, des transactions instantanées, et ma réservation est sécurisée par des smart contracts."
+      }
+    },
+    "disclaimer": "Témoignages illustratifs - Vrais avis vérifiés bientôt disponibles on-chain"
   }
 }

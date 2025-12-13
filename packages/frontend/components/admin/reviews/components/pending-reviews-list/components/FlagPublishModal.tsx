@@ -4,7 +4,8 @@
  * Modal for Flag & Publish flow
  */
 
-import { Flag, Loader2 } from "lucide-react";
+import * as React from "react";
+import { Flag, Loader2, Shield, Eye, Scale, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -16,10 +17,21 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import type { PendingReviewData } from "@/lib/hooks/contracts/adminReviews";
 import type { FlagPublishStep } from "../../../types";
 import { RatingStars } from "../../RatingStars";
 import { ReviewCommentDisplay } from "../../ReviewCommentDisplay";
+import { cn } from "@/lib/utils";
+import { EasterEggBadge, FloatingIconConfig } from "@/components/easter-eggs/shared/EasterEggBadge";
+
+// Guardian icons for floating effect
+const GUARDIAN_ICONS: FloatingIconConfig[] = [
+  { icon: Shield, color: "#EAB308" },
+  { icon: Eye, color: "#8B5CF6" },
+  { icon: Scale, color: "#F59E0B" },
+  { icon: Sparkles, color: "#10B981" },
+];
 
 interface FlagPublishModalProps {
   open: boolean;
@@ -51,6 +63,34 @@ export function FlagPublishModal({
   isPublishing,
   isFlagging,
 }: FlagPublishModalProps) {
+  // 🛡️ Easter egg for Eve - the guardian of reviews
+  const [guardianMode, setGuardianMode] = React.useState(false);
+  const [showBadge, setShowBadge] = React.useState(false);
+  const guardianShownRef = React.useRef(false);
+
+  React.useEffect(() => {
+    const secretWords = ["eve", "guardian", "gardienne"];
+    const isGuardian = secretWords.some((word) => reason.toLowerCase().includes(word));
+
+    if (isGuardian && !guardianShownRef.current) {
+      setGuardianMode(true);
+      guardianShownRef.current = true;
+      setShowBadge(true);
+
+      toast("🛡️ Eve, gardienne des reviews, veille sur la communauté !", {
+        icon: <Shield className="h-5 w-5 text-yellow-500" />,
+        duration: 5000,
+      });
+    } else if (!isGuardian) {
+      setGuardianMode(false);
+      guardianShownRef.current = false;
+    }
+  }, [reason]);
+
+  const closeBadge = React.useCallback(() => {
+    setShowBadge(false);
+  }, []);
+
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen && step === "idle") {
       onClose();
@@ -63,7 +103,14 @@ export function FlagPublishModal({
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Flag className="h-5 w-5 text-orange-500" />
+            <Flag
+              className={cn(
+                "h-5 w-5 transition-all duration-300",
+                guardianMode
+                  ? "animate-pulse text-yellow-500 drop-shadow-[0_0_8px_rgba(234,179,8,0.8)]"
+                  : "text-orange-500"
+              )}
+            />
             Flag & Publish Review
           </DialogTitle>
           <DialogDescription>
@@ -111,17 +158,77 @@ export function FlagPublishModal({
           </Button>
           <Button
             variant="default"
-            className="bg-orange-500 hover:bg-orange-600"
+            className={cn(
+              "transition-all duration-300",
+              guardianMode
+                ? "bg-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.5)] hover:bg-yellow-600"
+                : "bg-orange-500 hover:bg-orange-600"
+            )}
             onClick={onStart}
             disabled={
               step !== "idle" || !reason.trim() || isApproving || isPublishing || isFlagging
             }
           >
             <Flag className="mr-2 h-4 w-4" />
-            Flag & Publish
+            {guardianMode ? "🛡️ Guardian Flag" : "Flag & Publish"}
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Eve Guardian Badge Popup */}
+      <EasterEggBadge
+        show={showBadge}
+        onClose={closeBadge}
+        autoCloseMs={6000}
+        zIndex={200}
+        backgroundGradient="bg-gradient-to-br from-yellow-900/90 via-amber-800/90 to-yellow-900/90"
+        floatingIcons={GUARDIAN_ICONS}
+        floatingIconsCount={15}
+        badgeGradient="bg-gradient-to-br from-yellow-500 via-amber-400 to-yellow-600"
+        badgeBorderColor="rgba(234, 179, 8, 0.5)"
+        glowGradient="bg-gradient-to-r from-yellow-500 via-amber-400 to-yellow-500"
+        mainIcon={<Shield className="h-16 w-16 text-white drop-shadow-lg" />}
+        miniIcons={[
+          {
+            icon: <Eye className="h-6 w-6" />,
+            gradient: "bg-gradient-to-r from-purple-500 to-indigo-500",
+            position: "top-right",
+            bounce: true,
+          },
+          {
+            icon: <Scale className="h-5 w-5" />,
+            gradient: "bg-gradient-to-r from-amber-500 to-orange-500",
+            position: "bottom-left",
+          },
+          {
+            icon: <Sparkles className="h-5 w-5" />,
+            gradient: "bg-gradient-to-r from-emerald-500 to-green-500",
+            position: "bottom-right",
+          },
+        ]}
+        subtitle="🛡️ Guardian Mode Activated"
+        subtitleColor="text-yellow-400"
+        title="Eve"
+        titleGradient="bg-gradient-to-r from-yellow-400 via-amber-300 to-yellow-400"
+        role="The Guardian of Reviews"
+        quote={
+          <>
+            &quot;La vérité finit toujours par émerger.
+            <br />
+            Je veille sur chaque avis.&quot; 👁️
+          </>
+        }
+        tags={[
+          { emoji: "🛡️", label: "Moderation" },
+          { emoji: "⚖️", label: "Justice" },
+          { emoji: "👁️", label: "Vigilance" },
+          { emoji: "✨", label: "Integrity" },
+        ]}
+        tagBgColor="bg-yellow-900/50"
+        tagTextColor="text-yellow-300"
+        tagBorderColor="border-yellow-500/30"
+        bouncingEmojis={["🛡️", "⚔️", "👑", "⚔️", "🛡️"]}
+      />
     </Dialog>
   );
 }

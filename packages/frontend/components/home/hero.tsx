@@ -15,6 +15,7 @@ import { useTranslation } from "@/lib/hooks/useTranslation";
 import { useSearchStore } from "@/lib/store";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { getAndClearRedirectPath } from "@/components/auth/protected-route";
+import { AdelieEasterEgg } from "@/components/easter-eggs/adelie-easter-egg";
 
 // Vacation-themed background images from Unsplash
 // ✨ Curated with love by Adélie ✨
@@ -121,7 +122,7 @@ export function Hero() {
       <div className="from-primary/20 absolute inset-0 bg-gradient-to-br to-purple-500/20" />
 
       <div className="relative z-10 container px-4 py-16 md:py-24">
-        <div className="mx-auto max-w-4xl text-center">
+        <div className="mx-auto max-w-5xl text-center">
           {/* Title */}
           <h1 className="mb-6 text-4xl font-bold tracking-tight text-white drop-shadow-lg sm:text-5xl md:text-6xl lg:text-7xl">
             {t("hero.title")}
@@ -133,7 +134,7 @@ export function Hero() {
           </p>
 
           {/* Search Bar */}
-          <div className="mx-auto max-w-3xl">
+          <div className="mx-auto max-w-4xl">
             <div className="bg-card rounded-2xl border p-4 shadow-2xl">
               <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
                 {/* Location Input */}
@@ -226,65 +227,7 @@ export function Hero() {
       </div>
 
       {/* Easter egg dedication */}
-      <button
-        onClick={() => {
-          const messages = [
-            "🐧 Adélie says: Have an amazing trip!",
-            "🌍 Adventure awaits, bon voyage!",
-            "✈️ The world is yours to explore!",
-            "🏝️ Paradise is just a booking away!",
-            "🎒 Pack your dreams, we'll handle the rest!",
-            "💫 Every journey begins with a single click!",
-          ];
-          const randomMessage = messages[Math.floor(Math.random() * messages.length)];
-
-          // Create floating message
-          const toast = document.createElement("div");
-          toast.textContent = randomMessage;
-          toast.style.cssText = `
-            position: fixed;
-            bottom: 80px;
-            right: 20px;
-            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
-            color: white;
-            padding: 12px 20px;
-            border-radius: 12px;
-            font-size: 14px;
-            font-weight: 500;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-            z-index: 9999;
-            animation: slideUp 0.3s ease-out;
-            opacity: 1;
-          `;
-
-          // Add animation keyframes
-          const style = document.createElement("style");
-          style.textContent = `
-            @keyframes slideUp {
-              from { transform: translateY(20px); opacity: 0; }
-              to { transform: translateY(0); opacity: 1; }
-            }
-            @keyframes fadeOut {
-              from { opacity: 1; }
-              to { opacity: 0; }
-            }
-          `;
-          document.head.appendChild(style);
-          document.body.appendChild(toast);
-
-          // Remove after 3 seconds
-          setTimeout(() => {
-            toast.style.animation = "fadeOut 0.3s ease-out forwards";
-            setTimeout(() => {
-              toast.remove();
-              style.remove();
-            }, 300);
-          }, 3000);
-        }}
-        className="absolute right-4 bottom-4 z-20 hidden cursor-pointer text-[10px] text-white/30 transition-all select-none hover:text-white/60 sm:block"
-      >
-        ✨ Curated with love by Adélie
-      </button>
+      <AdelieEasterEgg />
     </section>
   );
 }
