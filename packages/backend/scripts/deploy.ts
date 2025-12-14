@@ -266,7 +266,8 @@ async function main() {
   await bookingManager.setPropertyNFTAdapter(addresses.propertyNFTAdapter);
   await bookingManager.setEscrowFactory(addresses.propertyNFTAdapter); // PropertyNFTAdapter acts as facade
   await bookingManager.setReviewRegistry(addresses.reviewRegistry);
-  console.log("    ✅ setPropertyNFTAdapter, setEscrowFactory, setReviewRegistry");
+  await bookingManager.setHostSBT(addresses.hostSBT);
+  console.log("    ✅ setPropertyNFTAdapter, setEscrowFactory, setReviewRegistry, setHostSBT");
 
   // EscrowFactory setters
   console.log("  Configuring EscrowFactory...");
@@ -285,10 +286,16 @@ async function main() {
   console.log("  Configuring SBT Authorizations...");
   await hostSBT.setAuthorizedUpdater(addresses.propertyRegistry, true);
   await hostSBT.setAuthorizedUpdater(addresses.reviewRegistry, true);
+  await hostSBT.setAuthorizedUpdater(addresses.bookingManager, true);
   await travelerSBT.setAuthorizedUpdater(addresses.bookingManager, true);
   await travelerSBT.setAuthorizedUpdater(addresses.reviewRegistry, true);
-  console.log("    ✅ HostSBT: PropertyRegistry, ReviewRegistry");
+  console.log("    ✅ HostSBT: PropertyRegistry, ReviewRegistry, BookingManager");
   console.log("    ✅ TravelerSBT: BookingManager, ReviewRegistry");
+
+  // ReviewRegistry authorization - allow ReviewValidator to publish reviews
+  console.log("  Configuring ReviewRegistry...");
+  await reviewRegistry.setReviewValidator(addresses.reviewValidator);
+  console.log("    ✅ setReviewValidator");
 
   // =====================================================
   // PHASE 7: Mint Test Tokens
@@ -490,6 +497,9 @@ async function updateIndexerEnv(addresses: DeployedAddresses, startBlock: number
     BOOKING_MANAGER_ADDRESS: addresses.bookingManager,
     ESCROW_FACTORY_ADDRESS: addresses.escrowFactory,
     REVIEW_REGISTRY_ADDRESS: addresses.reviewRegistry,
+    // SBT contracts (required for host/traveler indexing)
+    TRAVELER_SBT_ADDRESS: addresses.travelerSBT,
+    HOST_SBT_ADDRESS: addresses.hostSBT,
     // Start block
     START_BLOCK: startBlock.toString(),
   };
