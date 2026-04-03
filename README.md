@@ -1,13 +1,35 @@
+<div align="center">
+
 # NomadNodes
 
-> Decentralized vacation rental platform - Airbnb/Booking competitor built entirely on blockchain
+**Decentralized Vacation Rental Platform**
 
-[![CI](https://github.com/YOUR_USERNAME/nomad-nodes/workflows/CI/badge.svg)](https://github.com/YOUR_USERNAME/nomad-nodes/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+_Airbnb/Booking competitor — built entirely on-chain_
+
+[![Solidity](https://img.shields.io/badge/Solidity-0.8.28-363636?style=flat-square&logo=solidity)](https://soliditylang.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-000?style=flat-square&logo=next.js)](https://nextjs.org/)
+[![Hardhat](https://img.shields.io/badge/Hardhat-3.0-FFF100?style=flat-square&logo=hardhat)](https://hardhat.org/)
+[![OpenZeppelin](https://img.shields.io/badge/OpenZeppelin-5.4-4E5EE4?style=flat-square&logo=openzeppelin)](https://openzeppelin.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
+
+<br/>
+
+<img src="https://img.shields.io/badge/Alyra_Certified-Golden_Badge-FFD700?style=for-the-badge&logoColor=black" />
+
+<br/>
+<br/>
+
+**50+ Solidity contracts** · Property NFTs · Escrow system · SBTs · On-chain reviews · USDC/EURC payments
+
+</div>
+
+---
 
 ## 🎯 Vision
 
 NomadNodes is a Web3-native vacation rental platform that eliminates intermediaries, reduces fees, and gives control back to hosts and travelers through blockchain technology.
+
+This project was built as the final project for the **Alyra Blockchain Developer Certification** and awarded the **Golden Badge**.
 
 ## 🏗️ Architecture
 
@@ -69,7 +91,7 @@ nomad-nodes/
 1. **Clone the repository**
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/nomad-nodes.git
+git clone https://github.com/Johnleouf21/nomad-nodes.git
 cd nomad-nodes
 ```
 
